@@ -180,7 +180,7 @@ export default function HomeScreen() {
           <Animated.View
             style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
           >
-            <View style={styles.logoRow}>
+            <View style={[styles.logoRow, { marginBottom: 100, marginTop: 100 }]}>
               <View style={styles.iconWrap}>
                 <BrainIcon size={28} color="#FFFFFF" />
               </View>
