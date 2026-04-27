@@ -1,4 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { gateway } from '@specific-dev/framework';
+import { generateText, Output } from 'ai';
+import { z } from 'zod';
 import type { App } from '../index.js';
 
 interface ValidateClaimBody {
@@ -13,6 +16,7 @@ interface PaperMetadata {
   doi?: string;
   pmid?: string;
   semanticScholarId?: string;
+  abstract?: string;
 }
 
 interface Study {
@@ -143,11 +147,22 @@ export function register(app: App, fastify: FastifyInstance) {
       }
 
       // Step 5: AI Analysis
-      const aiAnalysis = await analyzeWithAI(claim, topPapers, app);
+      let aiAnalysis = await analyzeWithAI(claim, topPapers, app);
 
-      // Step 6: Build response
-      const studies: Study[] = aiAnalysis.papers.map((aiPaper) => {
-        const originalPaper = topPapers[aiPaper.index - 1];
+      // Step 6: Validate and build response
+      app.logger.debug({ papersCount: aiAnalysis.papers.length, topPapersCount: topPapers.length }, 'Building response from AI analysis');
+
+      // Validate that we have the same number of analyses as papers
+      if (!aiAnalysis.papers || aiAnalysis.papers.length === 0 || aiAnalysis.papers.length !== topPapers.length) {
+        app.logger.warn(
+          { analysisCount: aiAnalysis.papers.length, paperCount: topPapers.length },
+          'Invalid AI analysis, using fallback'
+        );
+        aiAnalysis = generateFallbackAnalysis(claim, topPapers);
+      }
+
+      const studies: Study[] = aiAnalysis.papers.map((aiPaper, index) => {
+        const originalPaper = topPapers[index];
         const authors =
           originalPaper.authors.length > 2
             ? `${originalPaper.authors[0]}, ${originalPaper.authors[1]} et al.`
@@ -253,6 +268,7 @@ async function fetchSemanticScholar(claim: string, app: App): Promise<PaperMetad
           journal: paper.journal?.name,
           doi: paper.externalIds?.DOI,
           semanticScholarId: paper.paperId,
+          abstract: paper.abstract,
         });
       }
     }
@@ -358,104 +374,183 @@ interface AIAnalysisResult {
   verdict: 'VALID' | 'INVALID' | 'INCONCLUSIVE';
   summary: string;
   papers: Array<{
-    index: number;
     stance: 'supports' | 'refutes' | 'neutral';
     key_finding: string;
     quote: string;
   }>;
 }
 
+const analysisSchema = z.object({
+  studies: z.array(
+    z.object({
+      stance: z.enum(['supports', 'refutes', 'neutral']),
+      key_finding: z.string(),
+      quote: z.string(),
+    })
+  ),
+  verdict: z.enum(['VALID', 'INVALID', 'INCONCLUSIVE']),
+  summary: z.string(),
+});
+
 async function analyzeWithAI(claim: string, papers: PaperMetadata[], app: App): Promise<AIAnalysisResult> {
   try {
-    const systemPrompt = `You are a scientific evidence analyst. You will be given a claim and a list of academic paper abstracts. Analyze each paper and return a JSON object. Return ONLY valid JSON, no markdown, no explanation.`;
+    app.logger.debug({ paperCount: papers.length }, 'Starting AI analysis');
+
+    const systemPrompt = `You are a scientific fact-checker. Given a claim and a list of research paper abstracts, analyze each paper's stance toward the claim and produce a JSON response.
+
+Return ONLY a valid JSON object with this exact structure:
+{
+  "studies": [
+    {
+      "stance": "supports" | "refutes" | "neutral",
+      "key_finding": "1-2 sentence summary of what this paper found relevant to the claim",
+      "quote": "A short direct quote or close paraphrase from the abstract"
+    }
+  ],
+  "verdict": "VALID" | "INVALID" | "INCONCLUSIVE",
+  "summary": "2-4 sentence plain-English explanation of the overall evidence"
+}
+
+Verdict rules:
+- VALID if more than 50% of studies have stance "supports"
+- INVALID if more than 50% of studies have stance "refutes"
+- INCONCLUSIVE otherwise (mixed evidence or insufficient data)
+
+Be objective and base your analysis strictly on the provided abstracts.`;
 
     const paperTexts = papers
       .map(
         (paper, index) =>
-          `${index + 1}. Title: ${paper.title}\n   Authors: ${paper.authors.join(', ')}\n   Year: ${paper.year}\n   Journal: ${paper.journal || 'Unknown'}\n   Abstract: ${paper.title}`
+          `Paper ${index + 1}: ${paper.title}\nAbstract: ${paper.abstract || 'No abstract available'}`
       )
       .join('\n\n');
 
-    const userPrompt = `Claim: "${claim}"
+    const userPrompt = `Claim: ${claim}
 
-Papers:
+Research papers:
 ${paperTexts}
 
-For each paper determine:
-- stance: "supports", "refutes", or "neutral" relative to the claim
-- key_finding: 1-2 sentence summary of the key finding
-- quote: a short direct quote or paraphrase from the abstract
+Analyze each paper's stance toward the claim and return the JSON response.`;
 
-Then compute:
-- overall verdict: "VALID" if >50% of papers support, "INVALID" if >50% refute, "INCONCLUSIVE" otherwise
-- summary: 2-4 sentence plain-English explanation of what the evidence collectively suggests
+    app.logger.debug({ promptLength: userPrompt.length }, 'Calling AI model');
 
-Return this exact JSON structure:
-{
-  "verdict": "VALID" | "INVALID" | "INCONCLUSIVE",
-  "summary": "...",
-  "papers": [
-    {
-      "index": 1,
-      "stance": "supports" | "refutes" | "neutral",
-      "key_finding": "...",
-      "quote": "..."
-    }
-  ]
-}`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
+    const { output } = await generateText({
+      model: gateway('openai/gpt-4o-mini'),
+      output: Output.object({
+        schema: analysisSchema,
+        name: 'ClaimAnalysis',
+        description: 'Analysis of research papers regarding a scientific claim',
       }),
+      system: systemPrompt,
+      prompt: userPrompt,
     });
 
-    if (!response.ok) {
-      app.logger.warn({ status: response.status }, 'OpenAI API returned non-OK status, using fallback analysis');
-      return generateFallbackAnalysis(papers);
+    app.logger.debug({ outputVerdictType: typeof output.verdict }, 'AI response received');
+
+    if (!output.studies || !Array.isArray(output.studies)) {
+      app.logger.warn('AI output missing studies array, using fallback');
+      return generateFallbackAnalysis(claim, papers);
     }
 
-    const data = (await response.json()) as any;
-    const content = data.choices?.[0]?.message?.content;
+    const result: AIAnalysisResult = {
+      verdict: output.verdict,
+      summary: output.summary,
+      papers: output.studies,
+    };
 
-    if (!content) {
-      app.logger.warn('No content in OpenAI response, using fallback analysis');
-      return generateFallbackAnalysis(papers);
-    }
-
-    const jsonStr = content.trim();
-    const analysis = JSON.parse(jsonStr) as AIAnalysisResult;
-
-    app.logger.debug({ verdict: analysis.verdict }, 'AI analysis completed');
-    return analysis;
+    app.logger.debug({ verdict: result.verdict, studiesCount: result.papers.length }, 'AI analysis completed');
+    return result;
   } catch (error) {
-    app.logger.warn({ err: error }, 'AI analysis failed, using fallback analysis');
-    return generateFallbackAnalysis(papers);
+    app.logger.warn({ err: error, errorMessage: error instanceof Error ? error.message : String(error) }, 'AI analysis failed, using fallback analysis');
+    return generateFallbackAnalysis(claim, papers);
   }
 }
 
-function generateFallbackAnalysis(papers: PaperMetadata[]): AIAnalysisResult {
-  const papersAnalysis = papers.map((paper, index) => ({
-    index: index + 1,
-    stance: 'neutral' as const,
+function detectStanceByKeywords(abstract: string, claim: string): 'supports' | 'refutes' | 'neutral' {
+  const abstractLower = abstract.toLowerCase();
+  const claimLower = claim.toLowerCase();
+
+  const supportKeywords = [
+    'significant',
+    'effective',
+    'beneficial',
+    'improves',
+    'increases',
+    'associated with',
+    'confirms',
+    'demonstrates',
+    'shows',
+    'found that',
+    'evidence supports',
+    'positive',
+  ];
+
+  const refuteKeywords = [
+    'no significant',
+    'not effective',
+    'no evidence',
+    'refutes',
+    'contradicts',
+    'fails to',
+    'no association',
+    'no effect',
+    'did not',
+    'does not',
+    'harmful',
+    'risk',
+    'adverse',
+    'negative',
+  ];
+
+  let supportMatches = 0;
+  let refuteMatches = 0;
+
+  for (const keyword of supportKeywords) {
+    if (abstractLower.includes(keyword)) {
+      supportMatches++;
+    }
+  }
+
+  for (const keyword of refuteKeywords) {
+    if (abstractLower.includes(keyword)) {
+      refuteMatches++;
+    }
+  }
+
+  if (refuteMatches > supportMatches) {
+    return 'refutes';
+  } else if (supportMatches > refuteMatches) {
+    return 'supports';
+  } else {
+    return 'neutral';
+  }
+}
+
+function generateFallbackAnalysis(claim: string, papers: PaperMetadata[]): AIAnalysisResult {
+  const stances = papers.map((paper) => ({
+    stance: detectStanceByKeywords(paper.abstract || '', claim),
     key_finding: `${paper.title} - published in ${paper.year}`,
-    quote: `This study from ${paper.year} provides relevant scientific evidence on the topic.`,
+    quote: paper.abstract ? paper.abstract.substring(0, 150) + '...' : 'Abstract not available',
   }));
 
+  const supportCount = stances.filter((s) => s.stance === 'supports').length;
+  const refuteCount = stances.filter((s) => s.stance === 'refutes').length;
+  const neutralCount = stances.filter((s) => s.stance === 'neutral').length;
+
+  let verdict: 'VALID' | 'INVALID' | 'INCONCLUSIVE';
+  if (supportCount > refuteCount && supportCount > papers.length / 2) {
+    verdict = 'VALID';
+  } else if (refuteCount > supportCount && refuteCount > papers.length / 2) {
+    verdict = 'INVALID';
+  } else {
+    verdict = 'INCONCLUSIVE';
+  }
+
+  const summary = `Based on keyword analysis of ${papers.length} papers: ${supportCount} supporting, ${refuteCount} refuting, ${neutralCount} neutral.`;
+
   return {
-    verdict: 'INCONCLUSIVE',
-    summary:
-      'The evidence is inconclusive based on the papers found. Further analysis with detailed paper content would be needed to determine the validity of this claim.',
-    papers: papersAnalysis,
+    verdict,
+    summary,
+    papers: stances,
   };
 }

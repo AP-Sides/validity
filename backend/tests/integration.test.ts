@@ -42,10 +42,14 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.supporting_count).toBeDefined();
     expect(data.refuting_count).toBeDefined();
+    expect(data.neutral_count).toBeDefined();
     expect(data.total_count).toBeDefined();
+    expect(data.supporting_pct).toBeDefined();
+    expect(data.refuting_pct).toBeDefined();
+    expect(data.neutral_pct).toBeDefined();
   });
 
-  test("POST /api/validate-claim - response includes summary", async () => {
+  test("POST /api/validate-claim - response includes summary, confidence, and studies", async () => {
     const res = await api("/api/validate-claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -55,5 +59,8 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.summary).toBeDefined();
     expect(typeof data.summary).toBe("string");
+    expect(data.confidence).toBeDefined();
+    expect(typeof data.confidence).toBe("number");
+    expect(Array.isArray(data.studies)).toBe(true);
   });
 });
