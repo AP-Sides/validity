@@ -6,10 +6,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useColorScheme, Alert } from "react-native";
+import { Alert } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
-  DarkTheme,
   DefaultTheme,
   Theme,
   ThemeProvider,
@@ -17,6 +16,16 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import {
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_400Regular_Italic,
+} from "@expo-google-fonts/playfair-display";
+import {
+  SourceSans3_400Regular,
+  SourceSans3_600SemiBold,
+  SourceSans3_300Light,
+} from "@expo-google-fonts/source-sans-3";
 
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
@@ -25,10 +34,15 @@ const DevErrorBoundary = __DEV__
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const networkState = useNetworkState();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_400Regular_Italic,
+    SourceSans3_400Regular,
+    SourceSans3_600SemiBold,
+    SourceSans3_300Light,
   });
 
   useEffect(() => {
@@ -53,33 +67,21 @@ export default function RootLayout() {
     ...DefaultTheme,
     dark: false,
     colors: {
-      primary: "#4F46E5",
-      background: "#F5F7FA",
-      card: "#FFFFFF",
-      text: "#1F2937",
-      border: "rgb(216, 216, 220)",
+      primary: "#1c3a5e",
+      background: "#faf9f7",
+      card: "#ffffff",
+      text: "#1a1a1a",
+      border: "#e8e0d5",
       notification: "rgb(255, 59, 48)",
     },
   };
 
-  const CustomDarkTheme: Theme = {
-    ...DarkTheme,
-    colors: {
-      primary: "#6366F1",
-      background: "#0F1117",
-      card: "#1E2130",
-      text: "#F1F5F9",
-      border: "rgb(44, 44, 46)",
-      notification: "rgb(255, 69, 58)",
-    },
-  };
+  if (!loaded) return null;
 
   return (
     <DevErrorBoundary>
-      <StatusBar style="auto" animated />
-      <ThemeProvider
-        value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
-      >
+      <StatusBar style="dark" animated />
+      <ThemeProvider value={CustomDefaultTheme}>
         <SafeAreaProvider>
           <WidgetProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
@@ -90,13 +92,13 @@ export default function RootLayout() {
                   options={{
                     title: "Results",
                     headerBackTitle: "Back",
-                    headerTintColor: "#4F46E5",
-                    headerStyle: { backgroundColor: "#F5F7FA" },
+                    headerTintColor: "#1c3a5e",
+                    headerStyle: { backgroundColor: "#faf9f7" },
                     headerShadowVisible: false,
                   }}
                 />
               </Stack>
-              <SystemBars style={"auto"} />
+              <SystemBars style="dark" />
             </GestureHandlerRootView>
           </WidgetProvider>
         </SafeAreaProvider>

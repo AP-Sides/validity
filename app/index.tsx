@@ -3,9 +3,9 @@ import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   ScrollView,
   Animated,
+  Easing,
   Pressable,
   KeyboardAvoidingView,
   Platform,
@@ -13,19 +13,19 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Circle, Path } from "react-native-svg";
 
-const COLORS = {
-  background: "#FAF7F2",
-  surface: "#FFFDF9",
-  surfaceSecondary: "#F5EFE6",
-  text: "#2C1810",
-  textSecondary: "#8B7355",
-  textTertiary: "#9E8E7A",
-  primary: "#C17F3E",
-  primaryMuted: "#F0E4D0",
-  border: "#E8DDD0",
-  danger: "#B85450",
+const C = {
+  BG: "#faf9f7",
+  CARD: "#ffffff",
+  CARD_TOP: "#f5f2ed",
+  NAVY: "#1c3a5e",
+  GOLD: "#c9a86c",
+  STEEL: "#4a6fa5",
+  BORDER: "#e8e0d5",
+  TEXT: "#1a1a1a",
+  TEXT_MUTED: "#8a7f72",
+  TEXT_HINT: "#b5a898",
+  DANGER: "#8b3a3a",
 };
 
 const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
@@ -34,6 +34,8 @@ const EXAMPLE_CLAIMS = [
   "Creatine improves muscle strength",
   "Meditation reduces anxiety",
   "Coffee increases productivity",
+  "Vitamin D deficiency causes depression",
+  "Exercise improves cognitive function",
 ];
 
 const LOADING_MESSAGES = [
@@ -42,68 +44,55 @@ const LOADING_MESSAGES = [
   "Generating verdict...",
 ];
 
-function BrainIcon({ size = 32, color = "#C17F3E" }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M9.5 2C8.12 2 7 3.12 7 4.5c0 .17.02.34.05.5H7C5.34 5 4 6.34 4 8c0 1.1.56 2.08 1.41 2.65C5.16 10.93 5 11.45 5 12c0 1.1.56 2.08 1.41 2.65C6.16 14.93 6 15.45 6 16c0 1.66 1.34 3 3 3h.5v1.5a.5.5 0 001 0V19H12v1.5a.5.5 0 001 0V19h.5c1.66 0 3-1.34 3-3 0-.55-.16-1.07-.41-1.35C17.44 14.08 18 13.1 18 12c0-.55-.16-1.07-.41-1.35C18.44 10.08 19 9.1 19 8c0-1.66-1.34-3-3-3h-.05c.03-.16.05-.33.05-.5C16 3.12 14.88 2 13.5 2c-.74 0-1.41.3-1.9.79A2.49 2.49 0 009.5 2z"
-        fill={color}
-        opacity={0.9}
-      />
-    </Svg>
-  );
-}
-
-function AnimatedPressable({
-  onPress,
-  style,
-  children,
-  disabled,
-}: {
-  onPress?: () => void;
-  style?: object | object[];
-  children: React.ReactNode;
-  disabled?: boolean;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const animateIn = useCallback(() => {
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
-  }, [scale]);
-  const animateOut = useCallback(() => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4 }).start();
-  }, [scale]);
-  return (
-    <Animated.View style={[{ transform: [{ scale }] }, disabled && { opacity: 0.5 }]}>
-      <Pressable
-        onPressIn={animateIn}
-        onPressOut={animateOut}
-        onPress={onPress}
-        disabled={disabled}
-        style={style}
-      >
-        {children}
-      </Pressable>
-    </Animated.View>
-  );
-}
-
 export default function HomeScreen() {
   const [claim, setClaim] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [pressedChip, setPressedChip] = useState<string | null>(null);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
+  // Staggered mount animations
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(20)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const cardSlide = useRef(new Animated.Value(20)).current;
+  const chipsAnim = useRef(new Animated.Value(0)).current;
+  const chipsSlide = useRef(new Animated.Value(20)).current;
+  const footerAnim = useRef(new Animated.Value(0)).current;
+  const footerSlide = useRef(new Animated.Value(20)).current;
+
   const loadingMsgOpacity = useRef(new Animated.Value(1)).current;
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const animateSection = useCallback(
+    (opacity: Animated.Value, translate: Animated.Value, delay: number) => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 500,
+          delay,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translate, {
+          toValue: 0,
+          duration: 500,
+          delay,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    },
+    []
+  );
+
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
-    ]).start();
-  }, [fadeAnim, slideAnim]);
+    animateSection(headerAnim, headerSlide, 0);
+    animateSection(cardAnim, cardSlide, 150);
+    animateSection(chipsAnim, chipsSlide, 280);
+    animateSection(footerAnim, footerSlide, 400);
+  }, [animateSection, headerAnim, headerSlide, cardAnim, cardSlide, chipsAnim, chipsSlide, footerAnim, footerSlide]);
 
   useEffect(() => {
     if (loading) {
@@ -125,11 +114,11 @@ export default function HomeScreen() {
 
   const handleValidate = useCallback(async () => {
     if (!claim.trim()) return;
-    console.log("[ClaimCheck] Validate button pressed, claim:", claim.trim());
+    console.log("[Validity] Analyze button pressed, claim:", claim.trim());
     setError(null);
     setLoading(true);
     try {
-      console.log("[ClaimCheck] POST /api/validate-claim →", BASE_URL);
+      console.log("[Validity] POST /api/validate-claim →", BASE_URL);
       const response = await fetch(`${BASE_URL}/api/validate-claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,18 +126,18 @@ export default function HomeScreen() {
       });
       if (!response.ok) {
         const text = await response.text();
-        console.error("[ClaimCheck] API error", response.status, text);
+        console.error("[Validity] API error", response.status, text);
         throw new Error(`Server error ${response.status}`);
       }
       const data = await response.json();
-      console.log("[ClaimCheck] API response received, verdict:", data.verdict);
+      console.log("[Validity] API response received, verdict:", data.verdict);
       router.push({
         pathname: "/results",
         params: { claim: claim.trim(), data: JSON.stringify(data) },
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      console.error("[ClaimCheck] Fetch failed:", message);
+      console.error("[Validity] Fetch failed:", message);
       setError("Couldn't validate your claim. Check your connection and try again.");
     } finally {
       setLoading(false);
@@ -156,259 +145,415 @@ export default function HomeScreen() {
   }, [claim]);
 
   const handleChipPress = useCallback((text: string) => {
-    console.log("[ClaimCheck] Example chip tapped:", text);
+    console.log("[Validity] Example chip tapped:", text);
     setClaim(text);
+    setPressedChip(text);
+    setTimeout(() => setPressedChip(null), 600);
   }, []);
 
   const loadingMessage = LOADING_MESSAGES[loadingMsgIndex];
   const isDisabled = !claim.trim() || loading;
 
+  const btnBg = isDisabled && !loading ? "#d4cfc9" : C.NAVY;
+  const btnTextColor = isDisabled && !loading ? "#a09890" : "#ffffff";
+
+  const inputBorderColor = isFocused ? C.NAVY : C.BORDER;
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Top accent bar */}
+          <View style={{ height: 3, backgroundColor: C.GOLD }} />
+
+          {/* Hero header */}
           <Animated.View
-            style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+            style={{
+              alignItems: "center",
+              paddingTop: 56,
+              paddingBottom: 40,
+              paddingHorizontal: 24,
+              opacity: headerAnim,
+              transform: [{ translateY: headerSlide }],
+            }}
           >
-            <View style={[styles.logoRow, { marginBottom: 100, marginTop: 100 }]}>
-              <View style={styles.iconWrap}>
-                <BrainIcon size={28} color="#FFFFFF" />
-              </View>
-              <Text style={styles.appName}>Validity</Text>
-            </View>
-            <Text style={styles.tagline}>Evidence-based fact checking</Text>
+            <Text
+              style={{
+                fontFamily: "SourceSans3_600SemiBold",
+                fontSize: 11,
+                color: C.GOLD,
+                letterSpacing: 3,
+                textTransform: "uppercase",
+                textAlign: "center",
+              }}
+            >
+              EVIDENCE-BASED RESEARCH VALIDATION
+            </Text>
+
+            <View style={{ height: 16 }} />
+
+            <Text
+              style={{
+                fontFamily: "PlayfairDisplay_700Bold",
+                fontSize: 52,
+                color: C.NAVY,
+                lineHeight: 56,
+                textAlign: "center",
+              }}
+            >
+              Hypothesis
+            </Text>
+            <Text
+              style={{
+                fontFamily: "PlayfairDisplay_400Regular_Italic",
+                fontSize: 52,
+                color: C.STEEL,
+                lineHeight: 56,
+                marginTop: -4,
+                textAlign: "center",
+              }}
+            >
+              Analyzer
+            </Text>
+
+            <View style={{ height: 20 }} />
+
+            <View
+              style={{
+                width: 72,
+                height: 1,
+                backgroundColor: C.GOLD,
+                opacity: 0.6,
+              }}
+            />
+
+            <View style={{ height: 20 }} />
+
+            <Text
+              style={{
+                fontFamily: "SourceSans3_300Light",
+                fontSize: 15,
+                color: C.TEXT_MUTED,
+                textAlign: "center",
+                lineHeight: 22,
+                maxWidth: 300,
+              }}
+            >
+              Submit any claim and receive analysis backed by peer-reviewed academic studies
+            </Text>
           </Animated.View>
 
-          {/* Input Card */}
+          {/* Input card */}
           <Animated.View
-            style={[styles.inputCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+            style={{
+              marginHorizontal: 20,
+              marginBottom: 16,
+              opacity: cardAnim,
+              transform: [{ translateY: cardSlide }],
+            }}
           >
-            <Text style={styles.inputLabel}>Your claim or hypothesis</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your claim or hypothesis..."
-              placeholderTextColor={COLORS.textTertiary}
-              value={claim}
-              onChangeText={setClaim}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              editable={!loading}
-            />
+            <View
+              style={{
+                backgroundColor: C.CARD,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: C.BORDER,
+                shadowColor: "#1c3a5e",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.08,
+                shadowRadius: 24,
+                elevation: 4,
+                overflow: "hidden",
+              }}
+            >
+              {/* Mock browser bar */}
+              <View
+                style={{
+                  backgroundColor: C.CARD_TOP,
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
+                </View>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.TEXT_HINT,
+                    flex: 1,
+                    textAlign: "center",
+                  }}
+                >
+                  pubmed-validator.ai
+                </Text>
+                <View style={{ width: 42 }} />
+              </View>
+
+              {/* Input area */}
+              <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 10,
+                    color: C.TEXT_MUTED,
+                    letterSpacing: 2,
+                    textTransform: "uppercase",
+                    marginBottom: 10,
+                  }}
+                >
+                  YOUR HYPOTHESIS OR CLAIM
+                </Text>
+                <TextInput
+                  style={{
+                    fontFamily: "PlayfairDisplay_400Regular",
+                    fontSize: 16,
+                    color: C.TEXT,
+                    minHeight: 90,
+                    textAlignVertical: "top",
+                    borderBottomWidth: 2,
+                    borderBottomColor: inputBorderColor,
+                    paddingBottom: 8,
+                    paddingTop: 0,
+                  }}
+                  placeholder="e.g. Creatine supplementation improves athletic performance..."
+                  placeholderTextColor={C.TEXT_HINT}
+                  value={claim}
+                  onChangeText={setClaim}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  editable={!loading}
+                  onFocus={() => {
+                    console.log("[Validity] TextInput focused");
+                    setIsFocused(true);
+                  }}
+                  onBlur={() => setIsFocused(false)}
+                />
+              </View>
+
+              {/* Card footer row */}
+              <View
+                style={{
+                  paddingHorizontal: 18,
+                  paddingBottom: 16,
+                  paddingTop: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.TEXT_HINT,
+                  }}
+                >
+                  Tap to analyze · ~15 seconds
+                </Text>
+
+                <Pressable
+                  onPress={() => {
+                    console.log("[Validity] Analyze Claim button pressed");
+                    handleValidate();
+                  }}
+                  disabled={isDisabled}
+                  style={{
+                    backgroundColor: btnBg,
+                    paddingHorizontal: 18,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    shadowColor: "#1c3a5e",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: isDisabled && !loading ? 0 : 0.3,
+                    shadowRadius: 8,
+                    elevation: isDisabled && !loading ? 0 : 3,
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <ActivityIndicator color="#ffffff" size="small" />
+                      <Animated.Text
+                        style={{
+                          fontFamily: "SourceSans3_600SemiBold",
+                          fontSize: 14,
+                          color: "#ffffff",
+                          opacity: loadingMsgOpacity,
+                        }}
+                      >
+                        {loadingMessage}
+                      </Animated.Text>
+                    </>
+                  ) : (
+                    <Text
+                      style={{
+                        fontFamily: "SourceSans3_600SemiBold",
+                        fontSize: 14,
+                        color: btnTextColor,
+                      }}
+                    >
+                      Analyze Claim →
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
           </Animated.View>
 
           {/* Example chips */}
-          <Animated.View style={[styles.chipsSection, { opacity: fadeAnim }]}>
-            <Text style={styles.chipsLabel}>Try an example</Text>
-            <View style={styles.chipsRow}>
-              {EXAMPLE_CLAIMS.map((ex) => (
-                <AnimatedPressable
+          <Animated.View
+            style={{
+              paddingHorizontal: 20,
+              marginBottom: 24,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+              justifyContent: "center",
+              opacity: chipsAnim,
+              transform: [{ translateY: chipsSlide }],
+            }}
+          >
+            {EXAMPLE_CLAIMS.map((ex) => {
+              const isPressed = pressedChip === ex;
+              return (
+                <Pressable
                   key={ex}
                   onPress={() => handleChipPress(ex)}
-                  style={styles.chip}
                   disabled={loading}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isPressed ? C.NAVY : C.BORDER,
+                    backgroundColor: isPressed ? C.NAVY : C.CARD,
+                    borderRadius: 20,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                  }}
                 >
-                  <Text style={styles.chipText}>{ex}</Text>
-                </AnimatedPressable>
-              ))}
-            </View>
+                  <Text
+                    style={{
+                      fontFamily: "SourceSans3_400Regular",
+                      fontSize: 13,
+                      color: isPressed ? "#ffffff" : C.TEXT_MUTED,
+                    }}
+                  >
+                    {ex}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </Animated.View>
 
-          {/* Error */}
+          {/* Error box */}
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
+            <View
+              style={{
+                marginHorizontal: 20,
+                marginBottom: 16,
+                backgroundColor: "rgba(139,58,58,0.07)",
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: "rgba(139,58,58,0.2)",
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 14,
+                  color: C.DANGER,
+                  lineHeight: 20,
+                }}
+              >
+                {error}
+              </Text>
             </View>
           ) : null}
 
-          {/* Validate Button */}
-          <View style={styles.buttonSection}>
-            <AnimatedPressable
-              onPress={handleValidate}
-              disabled={isDisabled}
-              style={[styles.validateButton, isDisabled && styles.validateButtonDisabled]}
-            >
-              {loading ? (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                  <Animated.Text style={[styles.loadingMsg, { opacity: loadingMsgOpacity }]}>
-                    {loadingMessage}
-                  </Animated.Text>
-                </View>
-              ) : (
-                <Text style={styles.validateButtonText}>Validate Claim</Text>
-              )}
-            </AnimatedPressable>
-          </View>
+          {/* Trust footer */}
+          <Animated.View
+            style={{
+              paddingBottom: 32,
+              paddingTop: 8,
+              alignItems: "center",
+              opacity: footerAnim,
+              transform: [{ translateY: footerSlide }],
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  textAlign: "center",
+                }}
+              >
+                Live PubMed Data
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  marginHorizontal: 4,
+                }}
+              >
+                ·
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  textAlign: "center",
+                }}
+              >
+                36M+ Academic Citations
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  marginHorizontal: 4,
+                }}
+              >
+                ·
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  textAlign: "center",
+                }}
+              >
+                Peer-Reviewed Sources
+              </Text>
+            </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 32,
-    paddingBottom: 40,
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 36,
-  },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#C17F3E",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#C17F3E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: COLORS.text,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    fontWeight: "400",
-    letterSpacing: 0.1,
-  },
-  inputCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  textInput: {
-    fontSize: 16,
-    color: COLORS.text,
-    minHeight: 100,
-    maxHeight: 180,
-    lineHeight: 24,
-    paddingTop: 0,
-  },
-  chipsSection: {
-    marginBottom: 24,
-  },
-  chipsLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    backgroundColor: "#F5EFE6",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#E8DDD0",
-  },
-  chipText: {
-    fontSize: 13,
-    color: "#8B7355",
-    fontWeight: "500",
-  },
-  errorBox: {
-    backgroundColor: "rgba(184,84,80,0.08)",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(184,84,80,0.2)",
-  },
-  errorText: {
-    fontSize: 14,
-    color: COLORS.danger,
-    lineHeight: 20,
-  },
-  buttonSection: {
-    marginTop: 8,
-  },
-  validateButton: {
-    backgroundColor: "#C17F3E",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#C17F3E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-    minHeight: 54,
-  },
-  validateButtonDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  validateButtonText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    letterSpacing: 0.2,
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  loadingMsg: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.9)",
-    fontWeight: "500",
-  },
-});
