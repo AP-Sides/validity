@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Verity Check",
-    "slug": "verity-check",
+    "name": "Validity",
+    "slug": "validity",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-lqe.png",

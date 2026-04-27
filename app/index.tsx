@@ -16,16 +16,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Path } from "react-native-svg";
 
 const COLORS = {
-  background: "#F5F7FA",
-  surface: "#FFFFFF",
-  surfaceSecondary: "#EEF0F5",
-  text: "#1F2937",
-  textSecondary: "#6B7280",
-  textTertiary: "#9CA3AF",
-  primary: "#4F46E5",
-  primaryMuted: "rgba(79,70,229,0.10)",
-  border: "rgba(31,41,55,0.10)",
-  danger: "#EF4444",
+  background: "#FAF7F2",
+  surface: "#FFFDF9",
+  surfaceSecondary: "#F5EFE6",
+  text: "#2C1810",
+  textSecondary: "#8B7355",
+  textTertiary: "#9E8E7A",
+  primary: "#C17F3E",
+  primaryMuted: "#F0E4D0",
+  border: "#E8DDD0",
+  danger: "#B85450",
 };
 
 const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
@@ -42,7 +42,7 @@ const LOADING_MESSAGES = [
   "Generating verdict...",
 ];
 
-function BrainIcon({ size = 32, color = "#4F46E5" }: { size?: number; color?: string }) {
+function BrainIcon({ size = 32, color = "#C17F3E" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -184,7 +184,7 @@ export default function HomeScreen() {
               <View style={styles.iconWrap}>
                 <BrainIcon size={28} color="#FFFFFF" />
               </View>
-              <Text style={styles.appName}>ClaimCheck</Text>
+              <Text style={styles.appName}>Validity</Text>
             </View>
             <Text style={styles.tagline}>Evidence-based fact checking</Text>
           </Animated.View>
@@ -283,10 +283,10 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#C17F3E",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: "#C17F3E",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -350,25 +350,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    backgroundColor: COLORS.primaryMuted,
+    backgroundColor: "#F5EFE6",
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "rgba(79,70,229,0.18)",
+    borderColor: "#E8DDD0",
   },
   chipText: {
     fontSize: 13,
-    color: COLORS.primary,
+    color: "#8B7355",
     fontWeight: "500",
   },
   errorBox: {
-    backgroundColor: "rgba(239,68,68,0.08)",
+    backgroundColor: "rgba(184,84,80,0.08)",
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+    borderColor: "rgba(184,84,80,0.2)",
   },
   errorText: {
     fontSize: 14,
@@ -379,12 +379,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   validateButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#C17F3E",
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: "#C17F3E",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,

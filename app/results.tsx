@@ -12,19 +12,19 @@ import { useLocalSearchParams } from "expo-router";
 import Svg, { Path, Circle, G } from "react-native-svg";
 
 const COLORS = {
-  background: "#F5F7FA",
-  surface: "#FFFFFF",
-  surfaceSecondary: "#EEF0F5",
-  summaryBg: "#F0F4FF",
-  text: "#1F2937",
-  textSecondary: "#6B7280",
-  textTertiary: "#9CA3AF",
-  primary: "#4F46E5",
-  primaryMuted: "rgba(79,70,229,0.10)",
-  border: "rgba(31,41,55,0.08)",
-  green: "#10B981",
-  red: "#EF4444",
-  gray: "#6B7280",
+  background: "#FAF7F2",
+  surface: "#FFFDF9",
+  surfaceSecondary: "#F5EFE6",
+  summaryBg: "#F5EFE6",
+  text: "#2C1810",
+  textSecondary: "#8B7355",
+  textTertiary: "#9E8E7A",
+  primary: "#C17F3E",
+  primaryMuted: "#F0E4D0",
+  border: "#E8DDD0",
+  green: "#5C8A5C",
+  red: "#B85450",
+  gray: "#9E8E7A",
 };
 
 interface Study {
@@ -494,10 +494,10 @@ const styles = StyleSheet.create({
   },
   quoteBlock: {
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
+    borderLeftColor: "#C17F3E",
     paddingLeft: 12,
     paddingVertical: 4,
-    backgroundColor: COLORS.primaryMuted,
+    backgroundColor: "#F0E4D0",
     borderRadius: 4,
   },
   quoteText: {
@@ -524,13 +524,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   badgeGreen: {
-    backgroundColor: "rgba(16,185,129,0.12)",
+    backgroundColor: "rgba(92,138,92,0.15)",
   },
   badgeRed: {
-    backgroundColor: "rgba(239,68,68,0.12)",
+    backgroundColor: "rgba(184,84,80,0.15)",
   },
   badgeGray: {
-    backgroundColor: "rgba(107,114,128,0.12)",
+    backgroundColor: "rgba(158,142,122,0.15)",
   },
   badgeText: {
     fontSize: 11,
@@ -548,11 +548,11 @@ const styles = StyleSheet.create({
 
   // Summary
   summaryCard: {
-    backgroundColor: COLORS.summaryBg,
+    backgroundColor: "#F5EFE6",
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(79,70,229,0.12)",
+    borderColor: "#E8DDD0",
     gap: 10,
   },
   summaryTitle: {
