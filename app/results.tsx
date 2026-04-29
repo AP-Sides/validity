@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Linking,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import Svg, { Path, Circle, G } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 
 const COLORS = {
   background: "#FAF7F2",
@@ -25,6 +25,8 @@ const COLORS = {
   green: "#5C8A5C",
   red: "#B85450",
   gray: "#9E8E7A",
+  gold: "#c9a86c",
+  navy: "#1c3a5e",
 };
 
 interface Study {
@@ -36,6 +38,9 @@ interface Study {
   key_finding: string;
   quote: string;
   url: string;
+  weight: number;
+  citation_count: number;
+  is_peer_reviewed: boolean;
 }
 
 interface ValidationResult {
@@ -52,19 +57,13 @@ interface ValidationResult {
   summary: string;
 }
 
+type TabStance = "supports" | "refutes" | "neutral";
+
 // ─── Donut Chart ─────────────────────────────────────────────────────────────
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
-  const clampedEnd = Math.min(endDeg, startDeg + 359.99);
-  const start = polarToCartesian(cx, cy, r, clampedEnd);
-  const end = polarToCartesian(cx, cy, r, startDeg);
-  const largeArc = clampedEnd - startDeg > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`;
 }
 
 function donutSegmentPath(
@@ -167,6 +166,33 @@ function AnimatedListItem({ index, children }: { index: number; children: React.
   );
 }
 
+// ─── Weight Bar ───────────────────────────────────────────────────────────────
+
+function WeightBar({ study }: { study: Study }) {
+  const weight = Number(study.weight) || 0;
+  const citationCount = Number(study.citation_count) || 0;
+  const weightDisplay = weight.toFixed(2);
+  const fillPercent = Math.min(Math.max(weight, 0), 1) * 100;
+  const fillPercentStr = `${fillPercent}%`;
+
+  const peerLabel = study.is_peer_reviewed ? "Peer-reviewed" : "Not peer-reviewed";
+  const citationLabel = citationCount > 0 ? `${citationCount} citations` : null;
+
+  const metaParts: string[] = [`Weight: ${weightDisplay}`];
+  if (citationLabel) metaParts.push(citationLabel);
+  if (study.is_peer_reviewed) metaParts.push(peerLabel);
+  const metaText = metaParts.join(" · ");
+
+  return (
+    <View style={styles.weightContainer}>
+      <View style={styles.weightTrack}>
+        <View style={[styles.weightFill, { width: fillPercentStr }]} />
+      </View>
+      <Text style={styles.weightLabel}>{metaText}</Text>
+    </View>
+  );
+}
+
 // ─── Study Card ───────────────────────────────────────────────────────────────
 
 function StanceBadge({ stance }: { stance: Study["stance"] }) {
@@ -196,7 +222,7 @@ function StanceBadge({ stance }: { stance: Study["stance"] }) {
 
 function StudyCard({ study, index }: { study: Study; index: number }) {
   const handleViewStudy = useCallback(() => {
-    console.log("[ClaimCheck] View Study pressed:", study.url);
+    console.log("[Validity] View Study pressed:", study.url);
     Linking.openURL(study.url);
   }, [study.url]);
 
@@ -220,6 +246,7 @@ function StudyCard({ study, index }: { study: Study; index: number }) {
             <Text style={styles.quoteText}>"{study.quote}"</Text>
           </View>
         ) : null}
+        <WeightBar study={study} />
         {study.url ? (
           <Pressable onPress={handleViewStudy} style={styles.viewStudyBtn}>
             <Text style={styles.viewStudyText}>View Study →</Text>
@@ -230,6 +257,70 @@ function StudyCard({ study, index }: { study: Study; index: number }) {
   );
 }
 
+// ─── Evidence Tabs ────────────────────────────────────────────────────────────
+
+const TAB_CONFIG: { stance: TabStance; emoji: string; label: string; color: string }[] = [
+  { stance: "supports", emoji: "✅", label: "Supports", color: COLORS.green },
+  { stance: "refutes", emoji: "❌", label: "Refutes", color: COLORS.red },
+  { stance: "neutral", emoji: "⚖️", label: "Neutral", color: COLORS.gray },
+];
+
+function EvidenceTabs({
+  studies,
+  activeTab,
+  onTabChange,
+}: {
+  studies: Study[];
+  activeTab: TabStance;
+  onTabChange: (tab: TabStance) => void;
+}) {
+  const supportCount = studies.filter((s) => s.stance === "supports").length;
+  const refuteCount = studies.filter((s) => s.stance === "refutes").length;
+  const neutralCount = studies.filter((s) => s.stance === "neutral").length;
+
+  const counts: Record<TabStance, number> = {
+    supports: supportCount,
+    refutes: refuteCount,
+    neutral: neutralCount,
+  };
+
+  return (
+    <View style={styles.tabBar}>
+      {TAB_CONFIG.map((tab) => {
+        const isActive = activeTab === tab.stance;
+        const count = counts[tab.stance];
+        const tabLabel = `${tab.emoji} ${tab.label} (${count})`;
+
+        return (
+          <Pressable
+            key={tab.stance}
+            style={[
+              styles.tabPill,
+              isActive
+                ? { backgroundColor: tab.color, borderColor: tab.color }
+                : styles.tabPillInactive,
+            ]}
+            onPress={() => {
+              console.log("[Validity] Evidence tab pressed:", tab.stance);
+              onTabChange(tab.stance);
+            }}
+          >
+            <Text
+              style={[
+                styles.tabPillText,
+                isActive ? styles.tabPillTextActive : { color: COLORS.textTertiary },
+              ]}
+              numberOfLines={1}
+            >
+              {tabLabel}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ResultsScreen() {
@@ -237,11 +328,26 @@ export default function ResultsScreen() {
   const claim = params.claim as string;
   const data: ValidationResult = JSON.parse(params.data as string);
 
+  const studies = data.studies ?? [];
+
+  const supportCount = studies.filter((s) => s.stance === "supports").length;
+  const refuteCount = studies.filter((s) => s.stance === "refutes").length;
+  const neutralCount = studies.filter((s) => s.stance === "neutral").length;
+
+  const defaultTab: TabStance =
+    supportCount >= refuteCount && supportCount >= neutralCount
+      ? "supports"
+      : refuteCount >= neutralCount
+      ? "refutes"
+      : "neutral";
+
+  const [activeTab, setActiveTab] = useState<TabStance>(defaultTab);
+
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
-    console.log("[ClaimCheck] Results screen mounted, verdict:", data.verdict, "confidence:", data.confidence);
+    console.log("[Validity] Results screen mounted, verdict:", data.verdict, "confidence:", data.confidence);
     Animated.parallel([
       Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
       Animated.timing(headerSlide, { toValue: 0, duration: 450, useNativeDriver: true }),
@@ -263,13 +369,19 @@ export default function ResultsScreen() {
       ? "Evidence leans toward: INVALID"
       : "Evidence is: INCONCLUSIVE";
 
-  const studyCount = data.studies ? data.studies.length : 0;
-  const sectionTitle = `Key Evidence (${studyCount} ${studyCount === 1 ? "study" : "studies"})`;
-
   const supportingPct = Number(data.supporting_pct) || 0;
   const refutingPct = Number(data.refuting_pct) || 0;
   const neutralPct = Number(data.neutral_pct) || 0;
   const confidence = Number(data.confidence) || 0;
+
+  const activeTabConfig = TAB_CONFIG.find((t) => t.stance === activeTab)!;
+  const activeStudies = studies.filter((s) => s.stance === activeTab);
+  const activeCount = activeStudies.length;
+  const sectionTitle = `${activeTabConfig.label} · ${activeCount} ${activeCount === 1 ? "study" : "studies"}`;
+
+  const handleTabChange = (tab: TabStance) => {
+    setActiveTab(tab);
+  };
 
   return (
     <ScrollView
@@ -318,11 +430,24 @@ export default function ResultsScreen() {
         </View>
       </View>
 
-      {/* Evidence Cards */}
+      {/* Evidence Tabs */}
+      <EvidenceTabs studies={studies} activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Section Title */}
       <Text style={styles.sectionTitle}>{sectionTitle}</Text>
-      {data.studies && data.studies.map((study, i) => (
-        <StudyCard key={i} study={study} index={i} />
-      ))}
+
+      {/* Study Cards */}
+      {activeStudies.length > 0 ? (
+        activeStudies.map((study, i) => (
+          <StudyCard key={`${activeTab}-${i}`} study={study} index={i} />
+        ))
+      ) : (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+            No {activeTabConfig.label.toLowerCase()} studies found
+          </Text>
+        </View>
+      )}
 
       {/* Summary */}
       {data.summary ? (
@@ -447,6 +572,33 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
+  // Tab Bar
+  tabBar: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  tabPill: {
+    flex: 1,
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  tabPillInactive: {
+    backgroundColor: "transparent",
+    borderColor: COLORS.border,
+  },
+  tabPillText: {
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: "SourceSans3_600SemiBold",
+  },
+  tabPillTextActive: {
+    color: "#FFFFFF",
+  },
+
   // Section title
   sectionTitle: {
     fontSize: 18,
@@ -454,6 +606,18 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: -0.2,
     marginBottom: -4,
+  },
+
+  // Empty state
+  emptyState: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
+    fontFamily: "SourceSans3_400Regular",
   },
 
   // Study Card
@@ -514,6 +678,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.primary,
     fontWeight: "600",
+  },
+
+  // Weight bar
+  weightContainer: {
+    gap: 4,
+  },
+  weightTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    overflow: "hidden",
+  },
+  weightFill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.gold,
+  },
+  weightLabel: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontFamily: "SourceSans3_400Regular",
   },
 
   // Stance badges
