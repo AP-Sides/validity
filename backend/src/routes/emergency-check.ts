@@ -3,8 +3,14 @@ import { generateText } from 'ai';
 import { gateway } from '@specific-dev/framework';
 import type { App } from '../index.js';
 
+interface AssessmentAnswer {
+  question: string;
+  answer: string;
+}
+
 interface EmergencyCheckRequest {
   situation: string;
+  answers?: AssessmentAnswer[];
 }
 
 interface EmergencyCheckResponse {
@@ -49,6 +55,18 @@ export function register(app: App, fastify: FastifyInstance) {
           required: ['situation'],
           properties: {
             situation: { type: 'string', minLength: 1, description: 'Description of the medical situation' },
+            answers: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  question: { type: 'string' },
+                  answer: { type: 'string' },
+                },
+                required: ['question', 'answer'],
+              },
+              description: 'Optional assessment answers from head-to-toe evaluation',
+            },
           },
         },
         response: {
@@ -83,55 +101,93 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request: FastifyRequest<{ Body: EmergencyCheckRequest }>, reply: FastifyReply) => {
-      const { situation } = request.body;
+      const { situation, answers = [] } = request.body;
 
-      app.logger.info({ situation }, 'Starting emergency triage assessment');
+      app.logger.info({ situation, answerCount: answers.length }, 'Starting emergency triage assessment');
 
       try {
-        // Call GPT-4o-mini with the system prompt and situation
-        const { text } = await generateText({
-          model: gateway('openai/gpt-4o-mini'),
-          system: EMERGENCY_TRIAGE_SYSTEM_PROMPT,
-          prompt: situation,
-        });
-
-        app.logger.debug({ responseLength: text.length }, 'Received AI triage response');
-
-        // Parse the JSON response (handle potential markdown code blocks)
-        let jsonText = text.trim();
-
-        // Extract JSON from markdown code blocks if present
-        const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[1].trim();
+        // Build the prompt with assessment findings if answers are provided
+        let prompt = situation;
+        if (answers && answers.length > 0) {
+          const assessmentFindings = answers
+            .map((a) => `- ${a.question}: ${a.answer}`)
+            .join('\n');
+          prompt = `Patient Assessment Findings:\n${assessmentFindings}\n\nPatient Situation: ${situation}`;
         }
 
-        let triageResponse: EmergencyCheckResponse;
+        let triageResponse: EmergencyCheckResponse | null = null;
+
         try {
-          triageResponse = JSON.parse(jsonText);
-        } catch (parseError) {
-          app.logger.error({ err: parseError, response: text }, 'Failed to parse triage response JSON');
-          return reply.status(500).send({ error: 'Failed to parse triage response' });
+          // Call GPT-4o-mini with the system prompt and situation/assessment context
+          const { text } = await generateText({
+            model: gateway('openai/gpt-4o-mini'),
+            system: EMERGENCY_TRIAGE_SYSTEM_PROMPT,
+            prompt,
+          });
+
+          app.logger.debug({ responseLength: text.length }, 'Received AI triage response');
+
+          // Parse the JSON response (handle potential markdown code blocks)
+          let jsonText = text.trim();
+
+          // Extract JSON from markdown code blocks if present
+          const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            jsonText = jsonMatch[1].trim();
+          }
+
+          try {
+            triageResponse = JSON.parse(jsonText);
+          } catch (parseError) {
+            app.logger.error({ err: parseError, response: text }, 'Failed to parse triage response JSON');
+            triageResponse = null;
+          }
+
+          // Validate response structure
+          if (triageResponse && (
+            !triageResponse.recommendation ||
+            typeof triageResponse.urgency_score !== 'number' ||
+            typeof triageResponse.confidence !== 'number' ||
+            !triageResponse.reasoning ||
+            !Array.isArray(triageResponse.warning_signs) ||
+            !Array.isArray(triageResponse.home_treatment) ||
+            !triageResponse.disclaimer
+          )) {
+            app.logger.error({ triageResponse }, 'Invalid triage response structure');
+            triageResponse = null;
+          }
+
+          // Validate enum value
+          if (triageResponse && !['GO_TO_ER', 'GO_TO_CLINIC', 'TREAT_AT_HOME'].includes(triageResponse.recommendation)) {
+            app.logger.error({ recommendation: triageResponse.recommendation }, 'Invalid recommendation value');
+            triageResponse = null;
+          }
+        } catch (error) {
+          app.logger.warn({ err: error }, 'AI triage assessment failed, using fallback response');
+          triageResponse = null;
         }
 
-        // Validate response structure
-        if (
-          !triageResponse.recommendation ||
-          typeof triageResponse.urgency_score !== 'number' ||
-          typeof triageResponse.confidence !== 'number' ||
-          !triageResponse.reasoning ||
-          !Array.isArray(triageResponse.warning_signs) ||
-          !Array.isArray(triageResponse.home_treatment) ||
-          !triageResponse.disclaimer
-        ) {
-          app.logger.error({ triageResponse }, 'Invalid triage response structure');
-          return reply.status(500).send({ error: 'Invalid triage response structure' });
-        }
-
-        // Validate enum value
-        if (!['GO_TO_ER', 'GO_TO_CLINIC', 'TREAT_AT_HOME'].includes(triageResponse.recommendation)) {
-          app.logger.error({ recommendation: triageResponse.recommendation }, 'Invalid recommendation value');
-          return reply.status(500).send({ error: 'Invalid recommendation value' });
+        // Use fallback response if AI response was invalid or failed
+        if (!triageResponse) {
+          app.logger.info('Using fallback triage response');
+          triageResponse = {
+            recommendation: 'GO_TO_CLINIC',
+            urgency_score: 5,
+            confidence: 0.6,
+            reasoning: 'Unable to perform AI-based assessment. Please consult a healthcare professional for accurate triage.',
+            warning_signs: [
+              'Chest pain or difficulty breathing',
+              'Loss of consciousness or severe confusion',
+              'Uncontrolled bleeding',
+            ],
+            home_treatment: [
+              'Rest in a comfortable position',
+              'Stay hydrated with water or electrolyte drinks',
+              'Monitor vital signs if possible',
+              'Note any symptom changes for your healthcare provider',
+            ],
+            disclaimer: 'This is not medical advice. Always consult a healthcare professional for medical decisions.',
+          };
         }
 
         app.logger.info(
@@ -141,7 +197,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
         return triageResponse;
       } catch (error) {
-        app.logger.error({ err: error, situation }, 'Emergency triage assessment failed');
+        app.logger.error({ err: error, situation }, 'Emergency triage assessment failed unexpectedly');
         throw error;
       }
     }

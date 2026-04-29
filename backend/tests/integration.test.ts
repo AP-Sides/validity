@@ -253,4 +253,50 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.urgency_score).toBeLessThan(7);
   });
+
+  // POST /api/emergency-questions tests
+  test("POST /api/emergency-questions - successful questions generation with 200 response", async () => {
+    const res = await api("/api/emergency-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient has chest pain" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.questions)).toBe(true);
+  });
+
+  test("POST /api/emergency-questions - questions have required fields", async () => {
+    const res = await api("/api/emergency-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient has shortness of breath" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.questions && data.questions.length > 0) {
+      const q = data.questions[0];
+      expect(q.id).toBeDefined();
+      expect(q.question).toBeDefined();
+      expect(["scale", "choice", "text"]).toContain(q.type);
+    }
+  });
+
+  test("POST /api/emergency-questions - missing required situation field returns 400", async () => {
+    const res = await api("/api/emergency-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-questions - empty situation string returns 400", async () => {
+    const res = await api("/api/emergency-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "" }),
+    });
+    await expectStatus(res, 400);
+  });
 });
