@@ -7,6 +7,7 @@ import {
   Animated,
   Pressable,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -28,6 +29,8 @@ const COLORS = {
   gold: "#c9a86c",
   navy: "#1c3a5e",
 };
+
+const BACKEND_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
 
 interface Study {
   title: string;
@@ -321,6 +324,25 @@ function EvidenceTabs({
   );
 }
 
+// ─── Summary helpers ──────────────────────────────────────────────────────────
+
+function splitSummaryAtMidpoint(summary: string): { first: string; second: string } {
+  if (!summary) return { first: "", second: "" };
+  const mid = Math.floor(summary.length / 2);
+  // Find the last period at or before the midpoint
+  const lastPeriodIdx = summary.lastIndexOf(".", mid);
+  if (lastPeriodIdx <= 0) {
+    // Fallback: split at midpoint word boundary
+    const spaceIdx = summary.indexOf(" ", mid);
+    if (spaceIdx === -1) return { first: summary, second: "" };
+    return { first: summary.slice(0, spaceIdx).trim(), second: summary.slice(spaceIdx).trim() };
+  }
+  return {
+    first: summary.slice(0, lastPeriodIdx + 1).trim(),
+    second: summary.slice(lastPeriodIdx + 1).trim(),
+  };
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ResultsScreen() {
@@ -328,7 +350,13 @@ export default function ResultsScreen() {
   const claim = params.claim as string;
   const data: ValidationResult = JSON.parse(params.data as string);
 
-  const studies = data.studies ?? [];
+  const [studies, setStudies] = useState<Study[]>(data.studies ?? []);
+  const [supportingPct, setSupportingPct] = useState(Number(data.supporting_pct) || 0);
+  const [refutingPct, setRefutingPct] = useState(Number(data.refuting_pct) || 0);
+  const [neutralPct, setNeutralPct] = useState(Number(data.neutral_pct) || 0);
+  const [confidence, setConfidence] = useState(Number(data.confidence) || 0);
+  const [verdict, setVerdict] = useState(data.verdict);
+  const [goDeeper, setGoDeeper] = useState<"idle" | "loading" | "done">("idle");
 
   const supportCount = studies.filter((s) => s.stance === "supports").length;
   const refuteCount = studies.filter((s) => s.stance === "refutes").length;
@@ -347,7 +375,7 @@ export default function ResultsScreen() {
   const headerSlide = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
-    console.log("[Validity] Results screen mounted, verdict:", data.verdict, "confidence:", data.confidence);
+    console.log("[Validity] Results screen mounted, verdict:", verdict, "confidence:", confidence);
     Animated.parallel([
       Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
       Animated.timing(headerSlide, { toValue: 0, duration: 450, useNativeDriver: true }),
@@ -356,23 +384,18 @@ export default function ResultsScreen() {
   }, [headerOpacity, headerSlide]);
 
   const verdictColor =
-    data.verdict === "VALID"
+    verdict === "VALID"
       ? COLORS.green
-      : data.verdict === "INVALID"
+      : verdict === "INVALID"
       ? COLORS.red
       : COLORS.gray;
 
   const verdictLabel =
-    data.verdict === "VALID"
+    verdict === "VALID"
       ? "Evidence leans toward: VALID"
-      : data.verdict === "INVALID"
+      : verdict === "INVALID"
       ? "Evidence leans toward: INVALID"
       : "Evidence is: INCONCLUSIVE";
-
-  const supportingPct = Number(data.supporting_pct) || 0;
-  const refutingPct = Number(data.refuting_pct) || 0;
-  const neutralPct = Number(data.neutral_pct) || 0;
-  const confidence = Number(data.confidence) || 0;
 
   const activeTabConfig = TAB_CONFIG.find((t) => t.stance === activeTab)!;
   const activeStudies = studies.filter((s) => s.stance === activeTab);
@@ -382,6 +405,76 @@ export default function ResultsScreen() {
   const handleTabChange = (tab: TabStance) => {
     setActiveTab(tab);
   };
+
+  const handleGoDeeper = useCallback(async () => {
+    if (goDeeper !== "idle") return;
+    const excludeTitles = studies.map((s) => s.title);
+    console.log("[Validity] Go Deeper pressed, claim:", claim, "excluding", excludeTitles.length, "studies");
+    setGoDeeper("loading");
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/validate-claim/deeper`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim, exclude_titles: excludeTitles }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log("[Validity] Go Deeper error response:", response.status, errText);
+        setGoDeeper("idle");
+        return;
+      }
+      const result = await response.json();
+      console.log("[Validity] Go Deeper response received, new studies:", result.studies?.length ?? 0);
+      const newStudies: Study[] = result.studies ?? [];
+      if (newStudies.length === 0) {
+        setGoDeeper("done");
+        return;
+      }
+      const merged = [...studies, ...newStudies];
+      setStudies(merged);
+
+      // Recompute weighted aggregates
+      const weightedSupporting = merged
+        .filter((s) => s.stance === "supports")
+        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
+      const weightedRefuting = merged
+        .filter((s) => s.stance === "refutes")
+        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
+      const weightedNeutral = merged
+        .filter((s) => s.stance === "neutral")
+        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
+      const totalWeight = weightedSupporting + weightedRefuting + weightedNeutral;
+
+      const newSupportingPct = totalWeight > 0 ? Math.round((weightedSupporting / totalWeight) * 100) : 0;
+      const newRefutingPct = totalWeight > 0 ? Math.round((weightedRefuting / totalWeight) * 100) : 0;
+      const newNeutralPct = totalWeight > 0 ? Math.round((weightedNeutral / totalWeight) * 100) : 0;
+      const newConfidence = Math.max(newSupportingPct, newRefutingPct, newNeutralPct);
+      const newVerdict: ValidationResult["verdict"] =
+        newSupportingPct > 50 ? "VALID" : newRefutingPct > 50 ? "INVALID" : "INCONCLUSIVE";
+
+      console.log("[Validity] Recomputed aggregates — supporting:", newSupportingPct, "refuting:", newRefutingPct, "neutral:", newNeutralPct, "verdict:", newVerdict);
+
+      setSupportingPct(newSupportingPct);
+      setRefutingPct(newRefutingPct);
+      setNeutralPct(newNeutralPct);
+      setConfidence(newConfidence);
+      setVerdict(newVerdict);
+      setGoDeeper("idle");
+    } catch (err) {
+      console.log("[Validity] Go Deeper fetch error:", err);
+      setGoDeeper("idle");
+    }
+  }, [goDeeper, studies, claim]);
+
+  const summaryParts = splitSummaryAtMidpoint(data.summary ?? "");
+  const consensusText = summaryParts.first;
+  const caveatsText = summaryParts.second;
+
+  // Go Deeper button derived values
+  const goDeeperLabel =
+    goDeeper === "loading" ? "Scanning..." : goDeeper === "done" ? "✓ Scanned" : "Go Deeper ↓";
+  const goDeeperDisabled = goDeeper !== "idle";
+  const goDeeperOpacity = goDeeper === "loading" ? 0.6 : 1;
 
   return (
     <ScrollView
@@ -404,7 +497,40 @@ export default function ResultsScreen() {
 
       {/* Confidence Donut */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Evidence Breakdown</Text>
+        {/* Card header row */}
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Evidence Breakdown</Text>
+          <Pressable
+            onPress={() => {
+              console.log("[Validity] Go Deeper button pressed");
+              handleGoDeeper();
+            }}
+            disabled={goDeeperDisabled}
+            style={[
+              styles.goDeeperBtn,
+              goDeeper === "done" && styles.goDeeperBtnDone,
+              goDeeper === "idle" && styles.goDeeperBtnIdle,
+              { opacity: goDeeperOpacity },
+            ]}
+          >
+            {goDeeper === "loading" ? (
+              <View style={styles.goDeeperInner}>
+                <ActivityIndicator size="small" color={COLORS.navy} style={{ marginRight: 5 }} />
+                <Text style={styles.goDeeperText}>{goDeeperLabel}</Text>
+              </View>
+            ) : (
+              <Text
+                style={[
+                  styles.goDeeperText,
+                  goDeeper === "done" && styles.goDeeperTextDone,
+                ]}
+              >
+                {goDeeperLabel}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+
         <View style={styles.donutWrapper}>
           <DonutChart
             supportingPct={supportingPct}
@@ -430,6 +556,37 @@ export default function ResultsScreen() {
         </View>
       </View>
 
+      {/* Critical Analysis Summary Card */}
+      {data.summary ? (
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryHeaderBlock}>
+            <Text style={styles.summaryTitle}>Critical Analysis</Text>
+            <Text style={styles.summarySubtitle}>AI-synthesized · Not medical/legal advice</Text>
+          </View>
+
+          {/* Sub-section A: Consensus View */}
+          <View style={styles.summarySection}>
+            <View style={styles.summarySectionHeader}>
+              <Text style={styles.summarySectionIcon}>📊</Text>
+              <Text style={styles.summarySectionTitleNavy}>Consensus View</Text>
+            </View>
+            <Text style={styles.summaryText}>{consensusText}</Text>
+          </View>
+
+          {/* Sub-section B: Critical Caveats */}
+          <View style={[styles.summarySection, styles.summarySectionGold]}>
+            <View style={styles.summarySectionHeader}>
+              <Text style={styles.summarySectionIcon}>⚠️</Text>
+              <Text style={styles.summarySectionTitleGold}>Critical Caveats</Text>
+            </View>
+            <Text style={styles.summaryText}>{caveatsText}</Text>
+            <Text style={styles.summaryDisclaimer}>
+              Note: Correlation ≠ causation. Study populations, methodologies, and effect sizes vary. Consult a qualified professional before acting on this information.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       {/* Evidence Tabs */}
       <EvidenceTabs studies={studies} activeTab={activeTab} onTabChange={handleTabChange} />
 
@@ -448,14 +605,6 @@ export default function ResultsScreen() {
           </Text>
         </View>
       )}
-
-      {/* Summary */}
-      {data.summary ? (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>What the Evidence Says</Text>
-          <Text style={styles.summaryText}>{data.summary}</Text>
-        </View>
-      ) : null}
     </ScrollView>
   );
 }
@@ -510,12 +659,46 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignItems: "center",
   },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+    marginBottom: 16,
+  },
   cardTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 16,
-    alignSelf: "flex-start",
+  },
+
+  // Go Deeper button
+  goDeeperBtn: {
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  goDeeperBtnIdle: {
+    borderWidth: 1,
+    borderColor: COLORS.navy,
+    backgroundColor: "transparent",
+  },
+  goDeeperBtnDone: {
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
+  goDeeperInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  goDeeperText: {
+    fontSize: 13,
+    fontWeight: "600",
+    fontFamily: "SourceSans3_600SemiBold",
+    color: COLORS.navy,
+  },
+  goDeeperTextDone: {
+    color: COLORS.green,
   },
 
   // Donut
@@ -731,23 +914,71 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
   },
 
-  // Summary
+  // Summary card
   summaryCard: {
     backgroundColor: "#F5EFE6",
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
     borderColor: "#E8DDD0",
-    gap: 10,
+    gap: 12,
+  },
+  summaryHeaderBlock: {
+    gap: 2,
   },
   summaryTitle: {
     fontSize: 17,
     fontWeight: "700",
     color: COLORS.text,
   },
+  summarySubtitle: {
+    fontSize: 11,
+    color: COLORS.gold,
+    fontStyle: "italic",
+    fontFamily: "SourceSans3_400Regular",
+  },
+  summarySection: {
+    backgroundColor: "#FFFDF9",
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.navy,
+    gap: 6,
+  },
+  summarySectionGold: {
+    borderLeftColor: COLORS.gold,
+  },
+  summarySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  summarySectionIcon: {
+    fontSize: 14,
+  },
+  summarySectionTitleNavy: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: "SourceSans3_600SemiBold",
+    color: COLORS.navy,
+  },
+  summarySectionTitleGold: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: "SourceSans3_600SemiBold",
+    color: COLORS.gold,
+  },
   summaryText: {
     fontSize: 15,
     color: COLORS.text,
     lineHeight: 23,
+  },
+  summaryDisclaimer: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
+    fontFamily: "SourceSans3_400Regular",
+    lineHeight: 16,
+    marginTop: 4,
   },
 });
