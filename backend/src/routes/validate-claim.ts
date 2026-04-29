@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { gateway } from '@specific-dev/framework';
+import { generateText } from 'ai';
 import type { App } from '../index.js';
 import {
   type PaperMetadata,
@@ -282,19 +284,43 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   });
 
-  // Deeper endpoint - papers 11-20
+  // Helper function to normalize titles for strict comparison
+  function normalizeTitleForComparison(title: string): string {
+    // Convert to lowercase and remove punctuation
+    return title
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove all punctuation
+      .trim();
+  }
+
+  // Deeper endpoint - papers with offset support
   fastify.post('/api/validate-claim/deeper', {
     schema: {
-      description: 'Validate a scientific claim against deeper papers (11-20 in relevance)',
+      description: 'Validate a scientific claim against deeper papers with offset support',
       tags: ['validation'],
       body: {
         type: 'object',
         required: ['claim'],
         properties: {
           claim: { type: 'string', minLength: 1 },
+          offset: { type: 'integer', default: 10, minimum: 0 },
           exclude_titles: {
             type: 'array',
             items: { type: 'string' },
+            default: [],
+          },
+          regenerate_summary: { type: 'boolean', default: false },
+          all_studies_context: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                stance: { type: 'string', enum: ['supports', 'refutes', 'neutral'] },
+                key_finding: { type: 'string' },
+              },
+              required: ['title', 'stance', 'key_finding'],
+            },
             default: [],
           },
         },
@@ -324,6 +350,7 @@ export function register(app: App, fastify: FastifyInstance) {
               },
             },
             new_count: { type: 'number' },
+            summary: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
         400: {
@@ -343,18 +370,30 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
   }, async (
-    request: FastifyRequest<{ Body: { claim: string; exclude_titles?: string[] } }>,
+    request: FastifyRequest<{
+      Body: {
+        claim: string;
+        offset?: number;
+        exclude_titles?: string[];
+        regenerate_summary?: boolean;
+        all_studies_context?: Array<{ title: string; stance: string; key_finding: string }>;
+      };
+    }>,
     reply: FastifyReply
   ) => {
-    const { claim, exclude_titles = [] } = request.body;
+    const { claim, offset = 10, exclude_titles = [], regenerate_summary = false, all_studies_context = [] } =
+      request.body;
 
-    app.logger.info({ claim, excludeCount: exclude_titles.length }, 'Starting deeper claim validation');
+    app.logger.info(
+      { claim, offset, excludeCount: exclude_titles.length, regenerateS: regenerate_summary },
+      'Starting deeper claim validation'
+    );
 
     try {
-      // Step 1: Fetch papers 11-20 from both sources in parallel
+      // Step 1: Fetch papers with offset from both sources in parallel
       const [semanticScholarPapers, pubmedPapers] = await Promise.all([
-        fetchSemanticScholarWithOffset(claim, 10, 10, app),
-        fetchPubMedWithOffset(claim, 10, 10, app),
+        fetchSemanticScholarWithOffset(claim, offset, 10, app),
+        fetchPubMedWithOffset(claim, offset, 10, app),
       ]);
 
       app.logger.info(
@@ -365,12 +404,13 @@ export function register(app: App, fastify: FastifyInstance) {
       // Step 2: Combine and deduplicate papers
       let allPapers = [...semanticScholarPapers, ...pubmedPapers];
 
-      // Filter out papers that match exclude_titles
+      // Filter out papers that match exclude_titles using strict normalized comparison (>80% similarity)
       allPapers = allPapers.filter((paper) => {
-        const titleLower = paper.title.toLowerCase();
-        return !exclude_titles.some(
-          (excludeTitle) => wordSimilarity(titleLower, excludeTitle.toLowerCase()) > 0.7
-        );
+        const normalizedPaperTitle = normalizeTitleForComparison(paper.title);
+        return !exclude_titles.some((excludeTitle) => {
+          const normalizedExcludeTitle = normalizeTitleForComparison(excludeTitle);
+          return wordSimilarity(normalizedPaperTitle, normalizedExcludeTitle) > 0.8;
+        });
       });
 
       // Fallback: if both APIs returned nothing, provide sample papers
@@ -379,6 +419,7 @@ export function register(app: App, fastify: FastifyInstance) {
         return {
           studies: [],
           new_count: 0,
+          summary: null,
         };
       }
 
@@ -449,13 +490,59 @@ export function register(app: App, fastify: FastifyInstance) {
         };
       });
 
+      // Step 6: Generate summary if requested
+      let summary: string | null = null;
+
+      if (regenerate_summary && all_studies_context.length > 0) {
+        try {
+          app.logger.debug({ contextCount: all_studies_context.length }, 'Generating updated summary');
+
+          // Combine new studies with context for comprehensive analysis
+          const combinedContext = [...all_studies_context, ...studies.map((s) => ({ title: s.title, stance: s.stance, key_finding: s.key_finding }))];
+          const totalCount = combinedContext.length;
+          const supportCount = combinedContext.filter((s) => s.stance === 'supports').length;
+          const refuteCount = combinedContext.filter((s) => s.stance === 'refutes').length;
+          const neutralCount = combinedContext.filter((s) => s.stance === 'neutral').length;
+
+          const summaryPrompt = `You are a scientific evidence analyst. Based on the following papers analyzed for the claim "${claim}", provide a comprehensive 3-4 sentence summary.
+
+Total papers analyzed: ${totalCount}
+- Supporting: ${supportCount}
+- Refuting: ${refuteCount}
+- Neutral: ${neutralCount}
+
+Key findings:
+${combinedContext.map((s) => `- ${s.title} (${s.stance}): ${s.key_finding}`).join('\n')}
+
+Please write a summary that:
+1. States what the overall weighted evidence suggests about the claim
+2. Notes any important caveats, contradictions, or limitations in the literature
+3. Explicitly warns about correlation vs. causation where relevant
+4. Mentions the total number of papers analyzed
+
+Keep it to 3-4 sentences, clear and accessible.`;
+
+          const { text } = await generateText({
+            model: gateway('openai/gpt-4o-mini'),
+            prompt: summaryPrompt,
+          });
+
+          summary = text;
+          app.logger.debug('Summary generated successfully');
+        } catch (error) {
+          app.logger.warn({ err: error }, 'Failed to generate summary, returning null');
+          summary = null;
+        }
+      }
+
       const response = {
         studies,
         new_count: studies.length,
+        summary,
       };
 
       app.logger.info(
-        { studyCount: response.new_count },
+        { studyCount: response.new_count, hasSummary: summary !== null },
         'Deeper claim validation completed successfully'
       );
 

@@ -138,4 +138,56 @@ describe("API Integration Tests", () => {
       expect(["supports", "refutes", "neutral"]).toContain(study.stance);
     }
   });
+
+  test("POST /api/validate-claim/deeper - with offset parameter", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "The Earth is round",
+        offset: 5,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.studies)).toBe(true);
+    expect(data.new_count).toBeDefined();
+    expect(typeof data.new_count).toBe("number");
+  });
+
+  test("POST /api/validate-claim/deeper - with regenerate_summary parameter", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "Water boils at 100 degrees Celsius",
+        regenerate_summary: true,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.studies)).toBe(true);
+    expect(data.new_count).toBeDefined();
+  });
+
+  test("POST /api/validate-claim/deeper - with all_studies_context parameter", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "Climate change is real",
+        all_studies_context: [
+          {
+            title: "Study A",
+            stance: "supports",
+            key_finding: "Evidence supports the claim",
+          },
+        ],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.studies)).toBe(true);
+    expect(data.new_count).toBeDefined();
+  });
 });
