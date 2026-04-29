@@ -1,5 +1,5 @@
 import { gateway } from '@specific-dev/framework';
-import { generateObject } from 'ai';
+import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
 import type { App } from '../index.js';
 
@@ -150,6 +150,19 @@ export function computePaperWeight(paper: PaperMetadata): number {
   return Math.round(weight * 100) / 100;
 }
 
+export const STANCE_CLASSIFICATION_SYSTEM_PROMPT = `You are a critical medical and scientific analyst with deep knowledge of established consensus across medicine, biology, physics, chemistry, psychology, and other sciences.
+
+Before evaluating any paper, first assess whether the claim aligns with established scientific or medical consensus (e.g. textbook knowledge, clinical guidelines, widely accepted mechanisms).
+
+If the claim is well-established in practice (e.g. "aortic stenosis causes systolic murmur", "smoking causes lung cancer", "exercise improves cardiovascular health"), treat this prior knowledge as strong evidence SUPPORTING the claim, and only classify a paper as "refutes" if it presents direct contradictory evidence with a clear mechanistic explanation.
+
+Do NOT classify a paper as "neutral" simply because it doesn't explicitly prove 100% causation — if the claim is consistent with established consensus and the paper is broadly consistent, classify it as "supports".
+
+Stance classification rules:
+- "supports": paper findings are consistent with the claim, OR the claim is established consensus and the paper does not contradict it
+- "refutes": paper presents direct evidence AGAINST the claim with a clear mechanistic or statistical basis
+- "neutral": paper is genuinely tangential, inconclusive, or studies a different population/context where the claim doesn't apply`;
+
 export async function classifyPapersWithAI(
   claim: string,
   papers: PaperMetadata[],
@@ -164,8 +177,6 @@ export async function classifyPapersWithAI(
           `Paper ${index}: Title: ${paper.title}\nAbstract: ${paper.abstract || 'No abstract available'}`
       )
       .join('\n\n');
-
-    const systemPrompt = `You are a scientific evidence classifier. Analyze each paper's stance toward the given claim and provide a concise summary of the overall evidence. For each paper, determine if it supports, refutes, or is neutral toward the claim.`;
 
     const userPrompt = `Claim: "${claim}"
 
@@ -183,7 +194,7 @@ Also provide an overall 2-3 sentence summary of what the evidence collectively s
     const { object } = await generateObject({
       model: gateway('openai/gpt-4o-mini'),
       schema: paperClassificationSchema,
-      system: systemPrompt,
+      system: STANCE_CLASSIFICATION_SYSTEM_PROMPT,
       prompt: userPrompt,
     });
 
@@ -192,6 +203,79 @@ Also provide an overall 2-3 sentence summary of what the evidence collectively s
     return object;
   } catch (error) {
     app.logger.error({ err: error }, 'AI classification failed');
+    return null;
+  }
+}
+
+export const FINAL_VERDICT_SYSTEM_PROMPT = `You are a senior research analyst and clinician with expertise across medical and scientific domains.
+
+Step 1 — Consensus check: Before reading the papers, assess whether this claim is consistent with established scientific or medical consensus. State your prior assessment explicitly (e.g. "This claim is well-established in cardiology: aortic stenosis classically produces a systolic ejection murmur due to turbulent flow across the stenotic valve.").
+
+Step 2 — Paper analysis: Now evaluate the papers provided. Weight them according to their quality scores. Note any papers that contradict the consensus and explain why.
+
+Step 3 — Critical synthesis: Combine your consensus prior with the paper evidence. If the papers are broadly consistent with consensus, the verdict should reflect that. Only override consensus if multiple high-quality papers (weight > 0.7) directly contradict it.
+
+For the critical analysis output:
+- "consensus_view": Start with what is established in the field, then describe what the papers show. Be direct — if something is clinically true, say so. Avoid false balance.
+- "critical_caveats": Note genuine nuances, edge cases, population-specific exceptions, or methodological limitations. Do NOT manufacture doubt about well-established facts.
+- "verdict": Should be VALID if the claim is consistent with established consensus AND the weighted paper evidence supports it (even partially). INVALID only if consensus AND papers both contradict the claim. INCONCLUSIVE only for genuinely contested or novel claims with no clear consensus.
+
+Avoid epistemic cowardice — do not hedge on things that are well-known to be true.`;
+
+export interface FinalVerdictAnalysis {
+  consensus_view: string;
+  critical_caveats: string;
+  summary: string;
+}
+
+export async function generateFinalVerdictSummary(
+  claim: string,
+  papersWithStance: Array<{
+    title: string;
+    key_finding: string;
+    stance: 'supports' | 'refutes' | 'neutral';
+    weight: number;
+  }>,
+  app: App
+): Promise<FinalVerdictAnalysis | null> {
+  try {
+    app.logger.debug({ paperCount: papersWithStance.length }, 'Generating final verdict summary');
+
+    const papersDescription = papersWithStance
+      .map((p) => `- Title: ${p.title}\n  Finding: ${p.key_finding}\n  Stance: ${p.stance} (weight: ${p.weight})`)
+      .join('\n\n');
+
+    const userPrompt = `Claim: "${claim}"
+
+Papers analyzed (with quality weights):
+${papersDescription}
+
+Please provide:
+1. consensus_view: What is established in the field, then what the papers show
+2. critical_caveats: Genuine nuances, edge cases, or methodological limitations
+3. summary: A 3-4 sentence synthesis combining consensus with paper evidence`;
+
+    const { text } = await generateText({
+      model: gateway('openai/gpt-4o-mini'),
+      system: FINAL_VERDICT_SYSTEM_PROMPT,
+      prompt: userPrompt,
+    });
+
+    // Parse the response to extract the three sections
+    const consensusMatch = text.match(/consensus_view[:\s]+([^\n]+(?:\n(?!critical_caveats|summary)[^\n]+)*)/i);
+    const caviatsMatch = text.match(/critical_caveats[:\s]+([^\n]+(?:\n(?!summary|consensus_view)[^\n]+)*)/i);
+    const summaryMatch = text.match(/summary[:\s]+([^\n]+(?:\n(?!consensus_view|critical_caveats)[^\n]+)*)/i);
+
+    const result: FinalVerdictAnalysis = {
+      consensus_view: consensusMatch ? consensusMatch[1].trim() : text,
+      critical_caveats: caviatsMatch ? caviatsMatch[1].trim() : '',
+      summary: summaryMatch ? summaryMatch[1].trim() : text,
+    };
+
+    app.logger.debug('Final verdict summary generated successfully');
+    return result;
+  } catch (error) {
+    app.logger.error({ err: error }, 'Failed to generate final verdict summary');
     return null;
   }
 }
