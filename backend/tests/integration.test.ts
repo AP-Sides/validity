@@ -579,4 +579,137 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.success).toBeDefined();
   });
+
+  // POST /api/drug-interactions tests
+  test("POST /api/drug-interactions - successful interaction analysis with 2 substances", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["ibuprofen", "acetaminophen"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.severity).toBeDefined();
+    expect(["NONE", "MILD", "MODERATE", "SEVERE"]).toContain(data.severity);
+    expect(data.confidence).toBeDefined();
+    expect(typeof data.confidence).toBe("number");
+    expect(data.confidence).toBeGreaterThanOrEqual(0);
+    expect(data.confidence).toBeLessThanOrEqual(100);
+    expect(data.summary).toBeDefined();
+    expect(typeof data.summary).toBe("string");
+    expect(Array.isArray(data.interactions)).toBe(true);
+    expect(Array.isArray(data.studies)).toBe(true);
+  });
+
+  test("POST /api/drug-interactions - interactions array contains substance pairs", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["aspirin", "warfarin"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.interactions && data.interactions.length > 0) {
+      const interaction = data.interactions[0];
+      expect(interaction.substance_a).toBeDefined();
+      expect(interaction.substance_b).toBeDefined();
+      expect(interaction.severity).toBeDefined();
+      expect(["NONE", "MILD", "MODERATE", "SEVERE"]).toContain(interaction.severity);
+      expect(interaction.mechanism).toBeDefined();
+      expect(interaction.recommendation).toBeDefined();
+    }
+  });
+
+  test("POST /api/drug-interactions - studies array includes key findings", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["metformin", "lisinopril"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.studies && data.studies.length > 0) {
+      const study = data.studies[0];
+      expect(study.title).toBeDefined();
+      expect(study.key_finding).toBeDefined();
+    }
+  });
+
+  test("POST /api/drug-interactions - missing required substances field returns 400", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/drug-interactions - insufficient substances (only 1) returns 400", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["ibuprofen"],
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/drug-interactions - empty substances array returns 400", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: [],
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/drug-interactions - substances with empty strings returns 400", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["ibuprofen", ""],
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/drug-interactions - with three substances", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["ibuprofen", "acetaminophen", "aspirin"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.severity).toBeDefined();
+    expect(data.confidence).toBeDefined();
+    expect(data.summary).toBeDefined();
+    expect(Array.isArray(data.interactions)).toBe(true);
+  });
+
+  test("POST /api/drug-interactions - with common medication names", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        substances: ["sertraline", "tramadol"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.severity).toBeDefined();
+    expect(data.confidence).toBeDefined();
+  });
 });

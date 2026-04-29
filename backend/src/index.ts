@@ -5,6 +5,7 @@ import * as emergencyCheckRoutes from './routes/emergency-check.js';
 import * as emergencyQuestionsRoutes from './routes/emergency-questions.js';
 import * as emergencyNextQuestionRoutes from './routes/emergency-next-question.js';
 import * as reviewsRoutes from './routes/reviews.js';
+import * as drugInteractionsRoutes from './routes/drug-interactions.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -19,6 +20,7 @@ emergencyCheckRoutes.register(app, app.fastify);
 emergencyQuestionsRoutes.register(app, app.fastify);
 emergencyNextQuestionRoutes.register(app, app.fastify);
 reviewsRoutes.register(app, app.fastify);
+drugInteractionsRoutes.register(app, app.fastify);
 
 await app.run();
 app.logger.info('Application running');

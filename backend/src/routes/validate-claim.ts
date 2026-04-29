@@ -133,16 +133,16 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Step 2: Select sources based on domain and fetch in parallel
       const fetchPromises: Promise<PaperMetadata[]>[] = [
-        fetchSemanticScholarWithOffset(claim, 0, 10, app),
+        fetchSemanticScholarWithOffset(claim, 0, 20, app),
       ];
 
       if (domain === 'medicine') {
-        fetchPromises.push(fetchPubMedWithOffset(claim, 0, 10, app));
+        fetchPromises.push(fetchPubMedWithOffset(claim, 0, 20, app));
       } else if (domain === 'physics_cs_math_ai') {
-        fetchPromises.push(fetchArxiv(claim, 10, 0, app));
+        fetchPromises.push(fetchArxiv(claim, 20, 0, app));
       } else if (domain === 'general' || domain === 'social_science') {
-        fetchPromises.push(fetchOpenAlex(claim, 10, 0, app));
-        fetchPromises.push(fetchCrossRef(claim, 5, 0, app));
+        fetchPromises.push(fetchOpenAlex(claim, 20, 0, app));
+        fetchPromises.push(fetchCrossRef(claim, 20, 0, app));
       }
 
       const results = await Promise.allSettled(fetchPromises);
@@ -390,6 +390,7 @@ export function register(app: App, fastify: FastifyInstance) {
               },
             },
             new_count: { type: 'number' },
+            found_new: { type: 'boolean' },
             summary: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
@@ -477,6 +478,7 @@ export function register(app: App, fastify: FastifyInstance) {
         return {
           studies: [],
           new_count: 0,
+          found_new: false,
           summary: null,
         };
       }
@@ -595,6 +597,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const response = {
         studies,
         new_count: studies.length,
+        found_new: true,
         summary,
       };
 
@@ -849,7 +852,7 @@ async function fetchSemanticScholar(claim: string, app: App): Promise<PaperMetad
   return fetchSemanticScholarWithOffset(claim, 0, 7, app);
 }
 
-async function fetchSemanticScholarWithOffset(
+export async function fetchSemanticScholarWithOffset(
   claim: string,
   offset: number,
   limit: number,
@@ -900,7 +903,7 @@ async function fetchPubMed(claim: string, app: App): Promise<PaperMetadata[]> {
   return fetchPubMedWithOffset(claim, 0, 7, app);
 }
 
-async function fetchPubMedWithOffset(
+export async function fetchPubMedWithOffset(
   claim: string,
   retstart: number,
   retmax: number,
