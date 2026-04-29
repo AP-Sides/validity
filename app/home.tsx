@@ -329,7 +329,7 @@ export default function HomeScreen() {
               <Pressable
                 onPress={() => {
                   console.log("[Home] Open Hypothesis Analyzer pressed");
-                  router.push("/");
+                  router.push("/analyzer");
                 }}
                 style={{
                   backgroundColor: C.NAVY,
