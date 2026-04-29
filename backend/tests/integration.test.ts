@@ -318,4 +318,147 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 400);
   });
+
+  // POST /api/emergency-next-question tests
+  test("POST /api/emergency-next-question - successful request with 200 response", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain",
+        question_number: 1,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.done).toBe("boolean");
+  });
+
+  test("POST /api/emergency-next-question - response contains question or null", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain",
+        question_number: 1,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.question === null || typeof data.question === "object").toBe(true);
+  });
+
+  test("POST /api/emergency-next-question - question object has required fields when present", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has shortness of breath",
+        question_number: 1,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.question !== null) {
+      expect(data.question.id).toBeDefined();
+      expect(data.question.question).toBeDefined();
+      expect(["scale", "choice", "text"]).toContain(data.question.type);
+    }
+  });
+
+  test("POST /api/emergency-next-question - missing required situation field returns 400", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question_number: 1,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-next-question - missing required question_number field returns 400", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-next-question - empty situation string returns 400", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "",
+        question_number: 1,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-next-question - with optional answers parameter", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain",
+        question_number: 2,
+        answers: [
+          {
+            question: "How long have you had the pain?",
+            category: "duration",
+            answer: "30 minutes",
+          },
+        ],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.done).toBe("boolean");
+  });
+
+  test("POST /api/emergency-next-question - with multiple answers", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain and shortness of breath",
+        question_number: 3,
+        answers: [
+          {
+            question: "How long?",
+            category: "duration",
+            answer: "2 hours",
+          },
+          {
+            question: "Severity?",
+            category: "severity",
+            answer: "8/10",
+          },
+        ],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.done).toBe("boolean");
+  });
+
+  test("POST /api/emergency-next-question - question_number as positive integer", async () => {
+    const res = await api("/api/emergency-next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has fever",
+        question_number: 5,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.done).toBe("boolean");
+    expect(data.question === null || typeof data.question === "object").toBe(true);
+  });
 });
