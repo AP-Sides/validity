@@ -41,6 +41,8 @@ export default function HomeScreen() {
   const analyzerSlide = useRef(new Animated.Value(20)).current;
   const emergencyAnim = useRef(new Animated.Value(0)).current;
   const emergencySlide = useRef(new Animated.Value(20)).current;
+  const interactionAnim = useRef(new Animated.Value(0)).current;
+  const interactionSlide = useRef(new Animated.Value(20)).current;
   const reviewAnim = useRef(new Animated.Value(0)).current;
   const reviewSlide = useRef(new Animated.Value(20)).current;
   const footerAnim = useRef(new Animated.Value(0)).current;
@@ -72,13 +74,15 @@ export default function HomeScreen() {
     animateSection(heroAnim, heroSlide, 0);
     animateSection(analyzerAnim, analyzerSlide, 150);
     animateSection(emergencyAnim, emergencySlide, 280);
-    animateSection(reviewAnim, reviewSlide, 400);
-    animateSection(footerAnim, footerSlide, 520);
+    animateSection(interactionAnim, interactionSlide, 400);
+    animateSection(reviewAnim, reviewSlide, 520);
+    animateSection(footerAnim, footerSlide, 640);
   }, [
     animateSection,
     heroAnim, heroSlide,
     analyzerAnim, analyzerSlide,
     emergencyAnim, emergencySlide,
+    interactionAnim, interactionSlide,
     reviewAnim, reviewSlide,
     footerAnim, footerSlide,
   ]);
@@ -476,6 +480,145 @@ export default function HomeScreen() {
                   paddingVertical: 10,
                   borderRadius: 10,
                   shadowColor: C.DANGER,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 3,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 14,
+                    color: "#ffffff",
+                  }}
+                >
+                  Open Tool →
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Interaction Checker card */}
+        <Animated.View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 16,
+            opacity: interactionAnim,
+            transform: [{ translateY: interactionSlide }],
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: C.CARD,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: C.BORDER,
+              shadowColor: C.NAVY,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08,
+              shadowRadius: 24,
+              elevation: 4,
+              overflow: "hidden",
+            }}
+          >
+            {/* Mock browser bar */}
+            <View
+              style={{
+                backgroundColor: C.CARD_TOP,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                  flex: 1,
+                  textAlign: "center",
+                }}
+              >
+                Interaction Checker
+              </Text>
+              <View style={{ width: 42 }} />
+            </View>
+
+            {/* Card body */}
+            <View style={{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
+              <View
+                style={{
+                  width: 3,
+                  backgroundColor: "#2a6b5e",
+                  borderRadius: 2,
+                  alignSelf: "stretch",
+                }}
+              />
+              <View style={{ flex: 1, paddingLeft: 14 }}>
+                <Text
+                  style={{
+                    fontFamily: "PlayfairDisplay_700Bold",
+                    fontSize: 20,
+                    color: "#2a6b5e",
+                    marginBottom: 6,
+                  }}
+                >
+                  Interaction Checker
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 14,
+                    color: C.TEXT_MUTED,
+                    lineHeight: 20,
+                  }}
+                >
+                  Check for dangerous interactions between medications, supplements, and substances.
+                </Text>
+              </View>
+            </View>
+
+            {/* Card footer */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 18,
+                paddingBottom: 16,
+                paddingTop: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 12,
+                  color: C.TEXT_HINT,
+                }}
+              >
+                Pair analysis · PubMed sourced
+              </Text>
+              <Pressable
+                onPress={() => {
+                  console.log("[Home] Open Interaction Checker pressed");
+                  router.push("/interactions");
+                }}
+                style={{
+                  backgroundColor: "#2a6b5e",
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  shadowColor: "#2a6b5e",
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.3,
                   shadowRadius: 8,

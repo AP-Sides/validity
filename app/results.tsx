@@ -360,6 +360,7 @@ export default function ResultsScreen() {
   const [deeperRound, setDeeperRound] = useState(0);
   const [deeperLoading, setDeeperLoading] = useState(false);
   const [deeperError, setDeeperError] = useState("");
+  const [deeperExhausted, setDeeperExhausted] = useState(false);
 
   const supportCount = studies.filter((s) => s.stance === "supports").length;
   const refuteCount = studies.filter((s) => s.stance === "refutes").length;
@@ -410,7 +411,7 @@ export default function ResultsScreen() {
   };
 
   const handleGoDeeper = useCallback(async () => {
-    if (deeperLoading || deeperRound >= 3) return;
+    if (deeperLoading || deeperExhausted) return;
     const excludeTitles = studies.map((s) => s.title);
     const offset = (deeperRound + 1) * 10;
     console.log("[Validity] Go Deeper pressed — round:", deeperRound + 1, "offset:", offset, "claim:", claim, "excluding", excludeTitles.length, "studies");
@@ -440,13 +441,19 @@ export default function ResultsScreen() {
         return;
       }
       const result = await response.json();
-      console.log("[Validity] Go Deeper response received, new studies:", result.studies?.length ?? 0);
+      console.log("[Validity] Go Deeper response received, found_new:", result.found_new, "new studies:", result.studies?.length ?? 0);
       const newStudies: Study[] = result.studies ?? [];
-      const merged = [...studies, ...newStudies];
 
-      if (newStudies.length > 0) {
-        setStudies(merged);
+      if (result.found_new === false || newStudies.length === 0) {
+        console.log("[Validity] Go Deeper exhausted — no additional sources found");
+        setDeeperExhausted(true);
+        setDeeperError("No additional sources found");
+        setDeeperLoading(false);
+        return;
       }
+
+      const merged = [...studies, ...newStudies];
+      setStudies(merged);
 
       // Recompute weighted aggregates from merged array
       const ws = merged.filter((s) => s.stance === "supports").reduce((a, s) => a + (s.weight || 0), 0);
@@ -479,24 +486,23 @@ export default function ResultsScreen() {
       setDeeperError("Scan failed — try again");
       setDeeperLoading(false);
     }
-  }, [deeperLoading, deeperRound, studies, claim]);
+  }, [deeperLoading, deeperExhausted, deeperRound, studies, claim]);
 
   const summaryParts = splitSummaryAtMidpoint(summary);
   const consensusText = summaryParts.first;
   const caveatsText = summaryParts.second;
 
   // Go Deeper button derived values
-  const goDeeperDisabled = deeperLoading || deeperRound >= 3;
+  const goDeeperDisabled = deeperLoading || deeperExhausted;
   const goDeeperOpacity = deeperLoading ? 0.6 : 1;
-  const goDeeperLabel =
-    deeperRound === 3
-      ? "✓ Max Depth"
-      : deeperLoading
-      ? "Scanning..."
-      : deeperRound === 0
-      ? "Go Deeper ↓"
-      : `Go Deeper ↓ (${3 - deeperRound} left)`;
-  const goDeeperIsMaxDepth = deeperRound >= 3;
+  const goDeeperLabel = deeperExhausted
+    ? "✓ No more sources"
+    : deeperLoading
+    ? "Scanning..."
+    : deeperRound === 0
+    ? "Go Deeper ↓"
+    : "Go Deeper ↓";
+  const goDeeperIsMaxDepth = deeperExhausted;
   const totalPapers = studies.length;
 
   return (

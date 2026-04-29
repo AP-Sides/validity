@@ -69,8 +69,9 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
   const isHome = pathname === "/home";
   const isAnalyzer = pathname === "/analyzer";
   const isEmergency = pathname === "/emergency";
+  const isInteractions = pathname === "/interactions";
 
-  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency") => {
+  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency" | "/interactions") => {
     console.log("[AppDrawer] Menu item tapped, navigating to:", route);
     onClose();
     setTimeout(() => {
@@ -320,6 +321,50 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
                   }}
                 >
                   Get triage guidance for your situation
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Menu item: Interaction Checker */}
+            <Pressable
+              onPress={() => handleNavigate("/interactions")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                marginHorizontal: 8,
+                borderRadius: 12,
+                borderLeftWidth: isInteractions ? 3 : 0,
+                borderLeftColor: C.GOLD,
+                backgroundColor: isInteractions
+                  ? C.DRAWER_ITEM_ACTIVE_BG
+                  : pressed
+                  ? C.DRAWER_ITEM_HOVER
+                  : "transparent",
+              })}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>⚗️</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 15,
+                    color: C.WHITE,
+                    marginBottom: 2,
+                  }}
+                >
+                  Interaction Checker
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.MUTED_BLUE,
+                    lineHeight: 17,
+                  }}
+                >
+                  Check substance interaction safety
                 </Text>
               </View>
             </Pressable>

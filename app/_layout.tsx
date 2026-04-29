@@ -114,6 +114,8 @@ export default function RootLayout() {
                     headerShadowVisible: false,
                   }}
                 />
+                <Stack.Screen name="interactions" options={{ headerShown: false }} />
+                <Stack.Screen name="interaction-results" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style="dark" />
             </GestureHandlerRootView>
