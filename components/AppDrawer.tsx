@@ -70,8 +70,10 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
   const isAnalyzer = pathname === "/analyzer";
   const isEmergency = pathname === "/emergency";
   const isInteractions = pathname === "/interactions";
+  const isMyths = pathname === "/myths";
+  const isFacts = pathname === "/facts";
 
-  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency" | "/interactions") => {
+  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency" | "/interactions" | "/myths" | "/facts") => {
     console.log("[AppDrawer] Menu item tapped, navigating to:", route);
     onClose();
     setTimeout(() => {
@@ -365,6 +367,94 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
                   }}
                 >
                   Check substance interaction safety
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Menu item: Myth Buster */}
+            <Pressable
+              onPress={() => handleNavigate("/myths")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                marginHorizontal: 8,
+                borderRadius: 12,
+                borderLeftWidth: isMyths ? 3 : 0,
+                borderLeftColor: C.GOLD,
+                backgroundColor: isMyths
+                  ? C.DRAWER_ITEM_ACTIVE_BG
+                  : pressed
+                  ? C.DRAWER_ITEM_HOVER
+                  : "transparent",
+              })}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>🧪</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 15,
+                    color: C.WHITE,
+                    marginBottom: 2,
+                  }}
+                >
+                  Myth Buster
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.MUTED_BLUE,
+                    lineHeight: 17,
+                  }}
+                >
+                  Nutrition claims rated by evidence
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Menu item: Did You Know */}
+            <Pressable
+              onPress={() => handleNavigate("/facts")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                marginHorizontal: 8,
+                borderRadius: 12,
+                borderLeftWidth: isFacts ? 3 : 0,
+                borderLeftColor: C.GOLD,
+                backgroundColor: isFacts
+                  ? C.DRAWER_ITEM_ACTIVE_BG
+                  : pressed
+                  ? C.DRAWER_ITEM_HOVER
+                  : "transparent",
+              })}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>💡</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 15,
+                    color: C.WHITE,
+                    marginBottom: 2,
+                  }}
+                >
+                  Did You Know?
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.MUTED_BLUE,
+                    lineHeight: 17,
+                  }}
+                >
+                  Surprising peer-reviewed discoveries
                 </Text>
               </View>
             </Pressable>
