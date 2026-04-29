@@ -63,4 +63,18 @@ describe("API Integration Tests", () => {
     expect(typeof data.confidence).toBe("number");
     expect(Array.isArray(data.studies)).toBe(true);
   });
+
+  test("POST /api/validate-claim - response includes weighted scores", async () => {
+    const res = await api("/api/validate-claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claim: "Climate change is caused by human activities" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.weighted_supporting).toBeDefined();
+    expect(data.weighted_refuting).toBeDefined();
+    expect(data.weighted_neutral).toBeDefined();
+    expect(data.total_weight).toBeDefined();
+  });
 });
