@@ -712,4 +712,188 @@ describe("API Integration Tests", () => {
     expect(data.severity).toBeDefined();
     expect(data.confidence).toBeDefined();
   });
+
+  // GET /api/nutrition-myths tests
+  test("GET /api/nutrition-myths - successful retrieval with 200 response", async () => {
+    const res = await api("/api/nutrition-myths", {
+      method: "GET",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("GET /api/nutrition-myths - returns array of myths with required fields", async () => {
+    const res = await api("/api/nutrition-myths", {
+      method: "GET",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.length > 0) {
+      const myth = data[0];
+      expect(myth.id).toBeDefined();
+      expect(myth.claim).toBeDefined();
+      expect(myth.verdict).toBeDefined();
+      expect(["BUSTED", "CONFIRMED", "COMPLICATED"]).toContain(myth.verdict);
+      expect(myth.one_liner).toBeDefined();
+      expect(myth.explanation).toBeDefined();
+      expect(Array.isArray(myth.studies)).toBe(true);
+    }
+  });
+
+  test("GET /api/nutrition-myths - studies contain expected fields", async () => {
+    const res = await api("/api/nutrition-myths", {
+      method: "GET",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.length > 0 && data[0].studies && data[0].studies.length > 0) {
+      const study = data[0].studies[0];
+      expect(study.title).toBeDefined();
+      expect(typeof study.title).toBe("string");
+    }
+  });
+
+  // POST /api/fun-facts tests
+  test("POST /api/fun-facts - successful request with medical category", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "medical" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - response contains fact objects with required fields", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "psychology" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.facts && data.facts.length > 0) {
+      const fact = data.facts[0];
+      expect(fact.id).toBeDefined();
+      expect(fact.headline).toBeDefined();
+      expect(fact.body).toBeDefined();
+    }
+  });
+
+  test("POST /api/fun-facts - with physics category", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "physics" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - with computer-science category", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "computer-science" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - with music category", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "music" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - with nature category", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "nature" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - missing required category field returns 400", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/fun-facts - invalid category value returns 400", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "invalid-category" }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/fun-facts - with optional seenIds parameter", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: "medical",
+        seenIds: ["id1", "id2"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - with empty seenIds array", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category: "medical",
+        seenIds: [],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.facts)).toBe(true);
+    expect(typeof data.total).toBe("number");
+  });
+
+  test("POST /api/fun-facts - facts include tag, journal, year, url when available", async () => {
+    const res = await api("/api/fun-facts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: "medical" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.facts && data.facts.length > 0) {
+      const fact = data.facts[0];
+      // These fields may be optional, check if they exist they have correct type
+      if (fact.tag !== undefined) expect(typeof fact.tag).toBe("string");
+      if (fact.journal !== undefined) expect(typeof fact.journal).toBe("string");
+      if (fact.year !== undefined) expect(typeof fact.year).toBe("number");
+      if (fact.url !== undefined) expect(typeof fact.url).toBe("string");
+    }
+  });
 });
