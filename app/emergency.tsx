@@ -9,7 +9,6 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -39,16 +38,10 @@ const EXAMPLE_CHIPS = [
   "Twisted ankle, mild swelling",
 ];
 
-const LOADING_MESSAGES = [
-  "Analyzing your situation...",
-  "Preparing assessment...",
-  "Loading questions...",
-];
+
 
 export default function EmergencyScreen() {
   const [situation, setSituation] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [pressedChip, setPressedChip] = useState<string | null>(null);
@@ -63,9 +56,6 @@ export default function EmergencyScreen() {
   const chipsSlide = useRef(new Animated.Value(20)).current;
   const footerAnim = useRef(new Animated.Value(0)).current;
   const footerSlide = useRef(new Animated.Value(20)).current;
-
-  const loadingMsgOpacity = useRef(new Animated.Value(1)).current;
-  const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const animateSection = useCallback(
     (opacity: Animated.Value, translate: Animated.Value, delay: number) => {
@@ -96,57 +86,14 @@ export default function EmergencyScreen() {
     animateSection(footerAnim, footerSlide, 400);
   }, [animateSection, headerAnim, headerSlide, cardAnim, cardSlide, chipsAnim, chipsSlide, footerAnim, footerSlide]);
 
-  useEffect(() => {
-    if (loading) {
-      setLoadingMsgIndex(0);
-      loadingIntervalRef.current = setInterval(() => {
-        Animated.sequence([
-          Animated.timing(loadingMsgOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-          Animated.timing(loadingMsgOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        ]).start();
-        setLoadingMsgIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-      }, 1800);
-    } else {
-      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
-    }
-    return () => {
-      if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current);
-    };
-  }, [loading, loadingMsgOpacity]);
-
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(() => {
     if (!situation.trim()) return;
     console.log("[Emergency] Get Triage button pressed, situation:", situation.trim());
     setError(null);
-    setLoading(true);
-    try {
-      console.log("[Emergency] POST /api/emergency-questions →", BASE_URL);
-      const response = await fetch(`${BASE_URL}/api/emergency-questions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ situation: situation.trim() }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        console.error("[Emergency] API error", response.status, text);
-        throw new Error(`Server error ${response.status}`);
-      }
-      const data = await response.json();
-      console.log("[Emergency] Questions received, count:", Array.isArray(data.questions) ? data.questions.length : 0);
-      router.push({
-        pathname: "/emergency-assessment",
-        params: {
-          situation: situation.trim(),
-          questions: JSON.stringify(data.questions),
-        },
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      console.error("[Emergency] Fetch failed:", message);
-      setError("Couldn't load assessment questions. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
+    router.push({
+      pathname: "/emergency-assessment",
+      params: { situation: situation.trim() },
+    });
   }, [situation]);
 
   const handleChipPress = useCallback((text: string) => {
@@ -158,11 +105,10 @@ export default function EmergencyScreen() {
 
   const swipeHandlers = useSwipeToOpenDrawer(() => setDrawerOpen(true));
 
-  const loadingMessage = LOADING_MESSAGES[loadingMsgIndex];
-  const isDisabled = !situation.trim() || loading;
+  const isDisabled = !situation.trim();
 
-  const btnBg = isDisabled && !loading ? "#d4cfc9" : C.NAVY;
-  const btnTextColor = isDisabled && !loading ? "#a09890" : "#ffffff";
+  const btnBg = isDisabled ? "#d4cfc9" : C.NAVY;
+  const btnTextColor = isDisabled ? "#a09890" : "#ffffff";
   const inputBorderColor = isFocused ? C.NAVY : C.BORDER;
 
   return (
@@ -350,7 +296,6 @@ export default function EmergencyScreen() {
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
-                  editable={!loading}
                   onFocus={() => {
                     console.log("[Emergency] TextInput focused");
                     setIsFocused(true);
@@ -396,36 +341,20 @@ export default function EmergencyScreen() {
                     gap: 8,
                     shadowColor: "#1c3a5e",
                     shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: isDisabled && !loading ? 0 : 0.3,
+                    shadowOpacity: isDisabled ? 0 : 0.3,
                     shadowRadius: 8,
-                    elevation: isDisabled && !loading ? 0 : 3,
+                    elevation: isDisabled ? 0 : 3,
                   }}
                 >
-                  {loading ? (
-                    <>
-                      <ActivityIndicator color="#ffffff" size="small" />
-                      <Animated.Text
-                        style={{
-                          fontFamily: "SourceSans3_600SemiBold",
-                          fontSize: 14,
-                          color: "#ffffff",
-                          opacity: loadingMsgOpacity,
-                        }}
-                      >
-                        {loadingMessage}
-                      </Animated.Text>
-                    </>
-                  ) : (
-                    <Text
-                      style={{
-                        fontFamily: "SourceSans3_600SemiBold",
-                        fontSize: 14,
-                        color: btnTextColor,
-                      }}
-                    >
-                      Get Triage →
-                    </Text>
-                  )}
+                  <Text
+                    style={{
+                      fontFamily: "SourceSans3_600SemiBold",
+                      fontSize: 14,
+                      color: btnTextColor,
+                    }}
+                  >
+                    Get Triage →
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -450,7 +379,6 @@ export default function EmergencyScreen() {
                 <Pressable
                   key={ex}
                   onPress={() => handleChipPress(ex)}
-                  disabled={loading}
                   style={{
                     borderWidth: 1,
                     borderColor: isPressed ? C.NAVY : C.BORDER,

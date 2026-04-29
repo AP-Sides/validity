@@ -30,6 +30,7 @@ const C = {
 };
 
 const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+const MAX_QUESTIONS = 12;
 
 type Question = {
   id: string;
@@ -41,8 +42,9 @@ type Question = {
   options: string[] | null;
 };
 
-type Answer = {
+type AnswerRecord = {
   question: string;
+  category: string;
   answer: string;
 };
 
@@ -203,28 +205,15 @@ function TextAnswerInput({
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function EmergencyAssessmentScreen() {
-  const params = useLocalSearchParams<{ situation: string; questions: string }>();
-
-  // Parse questions from params
-  let parsedQuestions: Question[] = [];
-  let parseError = false;
-  try {
-    if (params.questions) {
-      parsedQuestions = JSON.parse(params.questions) as Question[];
-    } else {
-      parseError = true;
-    }
-  } catch {
-    parseError = true;
-  }
-
+  const params = useLocalSearchParams<{ situation: string }>();
   const situation = params.situation ?? "";
 
-  const [questions] = useState<Question[]>(parsedQuestions);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [questionNumber, setQuestionNumber] = useState(1);
+  const [fetchingNext, setFetchingNext] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [situationExpanded, setSituationExpanded] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -274,14 +263,10 @@ export default function EmergencyAssessmentScreen() {
     ]).start();
   }, [cardOpacity, cardTranslate]);
 
-  useEffect(() => {
-    animateCardIn();
-  }, [currentIndex, animateCardIn]);
-
   const submitAssessment = useCallback(
-    async (finalAnswers: Answer[]) => {
+    async (finalAnswers: AnswerRecord[]) => {
       console.log("[Assessment] Submitting assessment, answers count:", finalAnswers.length);
-      setLoading(true);
+      setSubmitting(true);
       setError(null);
       try {
         console.log("[Assessment] POST /api/emergency-check →", BASE_URL);
@@ -305,45 +290,107 @@ export default function EmergencyAssessmentScreen() {
         const message = err instanceof Error ? err.message : "Unknown error";
         console.error("[Assessment] Submit failed:", message);
         setError("Couldn't get triage guidance. Check your connection and try again.");
-        setLoading(false);
+        setSubmitting(false);
       }
     },
     [situation]
   );
 
-  const advanceQuestion = useCallback(
-    (answer: string) => {
-      const question = questions[currentIndex];
-      const newAnswers = [...answers, { question: question.question, answer }];
-      setAnswers(newAnswers);
-      setCurrentAnswer(null);
-
-      if (currentIndex < questions.length - 1) {
-        // Slide current card out to left, then advance
-        Animated.parallel([
-          Animated.timing(cardOpacity, {
-            toValue: 0,
-            duration: 200,
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: true,
+  const fetchNextQuestion = useCallback(
+    async (currentAnswers: AnswerRecord[], nextQuestionNumber: number) => {
+      console.log("[Assessment] Fetching question", nextQuestionNumber, "answers so far:", currentAnswers.length);
+      setFetchingNext(true);
+      setError(null);
+      try {
+        console.log("[Assessment] POST /api/emergency-next-question →", BASE_URL);
+        const response = await fetch(`${BASE_URL}/api/emergency-next-question`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            situation,
+            answers: currentAnswers,
+            question_number: nextQuestionNumber,
           }),
-          Animated.timing(cardTranslate, {
-            toValue: -60,
-            duration: 200,
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          setCurrentIndex((prev) => prev + 1);
-          // Collapse situation summary after first question
-          setSituationExpanded(false);
         });
-      } else {
-        // Last question — submit
-        submitAssessment(newAnswers);
+        if (!response.ok) {
+          const text = await response.text();
+          console.error("[Assessment] Next-question API error", response.status, text);
+          throw new Error(`Server error ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("[Assessment] Next-question response, done:", data.done);
+        if (data.done) {
+          setFetchingNext(false);
+          await submitAssessment(currentAnswers);
+        } else {
+          setCurrentQuestion(data.question);
+          setCurrentAnswer(null);
+          animateCardIn();
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("[Assessment] fetchNextQuestion failed:", message);
+        setError("Couldn't load the next question. Tap retry or skip to continue.");
+      } finally {
+        setFetchingNext(false);
       }
     },
-    [answers, currentIndex, questions, cardOpacity, cardTranslate, submitAssessment]
+    [situation, submitAssessment, animateCardIn]
+  );
+
+  // Refs to hold latest values for retry/skip without stale closures
+  const latestAnswersRef = useRef<AnswerRecord[]>([]);
+  const latestQuestionNumberRef = useRef(1);
+
+  useEffect(() => {
+    latestAnswersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
+    latestQuestionNumberRef.current = questionNumber;
+  }, [questionNumber]);
+
+  // Load first question on mount
+  useEffect(() => {
+    fetchNextQuestion([], 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const advanceQuestion = useCallback(
+    (answer: string) => {
+      if (!currentQuestion) return;
+      const newRecord: AnswerRecord = {
+        question: currentQuestion.question,
+        category: currentQuestion.category,
+        answer,
+      };
+      const newAnswers = [...answers, newRecord];
+      const nextNumber = questionNumber + 1;
+
+      setAnswers(newAnswers);
+      setCurrentAnswer(null);
+      setQuestionNumber(nextNumber);
+      setSituationExpanded(false);
+
+      // Animate card out to left, then fetch next
+      Animated.parallel([
+        Animated.timing(cardOpacity, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(cardTranslate, {
+          toValue: -60,
+          duration: 200,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        fetchNextQuestion(newAnswers, nextNumber);
+      });
+    },
+    [answers, currentQuestion, questionNumber, cardOpacity, cardTranslate, fetchNextQuestion]
   );
 
   const handleNext = useCallback(() => {
@@ -353,12 +400,22 @@ export default function EmergencyAssessmentScreen() {
   }, [currentAnswer, advanceQuestion]);
 
   const handleSkip = useCallback(() => {
-    console.log("[Assessment] Skip pressed for question:", questions[currentIndex]?.question);
+    console.log("[Assessment] Skip pressed for question:", currentQuestion?.question);
     advanceQuestion("Not answered");
-  }, [advanceQuestion, currentIndex, questions]);
+  }, [advanceQuestion, currentQuestion]);
 
-  // ── Parse error state ──────────────────────────────────────────────────────
-  if (parseError || questions.length === 0) {
+  const handleRetry = useCallback(() => {
+    console.log("[Assessment] Retry pressed, re-fetching question", latestQuestionNumberRef.current);
+    fetchNextQuestion(latestAnswersRef.current, latestQuestionNumberRef.current);
+  }, [fetchNextQuestion]);
+
+  const handleSkipToTriage = useCallback(() => {
+    console.log("[Assessment] Skip to Triage pressed");
+    submitAssessment(latestAnswersRef.current);
+  }, [submitAssessment]);
+
+  // ── No situation error state ───────────────────────────────────────────────
+  if (!situation) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
         <View style={{ height: 3, backgroundColor: C.GOLD }} />
@@ -372,7 +429,7 @@ export default function EmergencyAssessmentScreen() {
               marginBottom: 12,
             }}
           >
-            Couldn't load questions
+            Couldn't load assessment
           </Text>
           <Text
             style={{
@@ -384,7 +441,7 @@ export default function EmergencyAssessmentScreen() {
               marginBottom: 24,
             }}
           >
-            The assessment questions could not be loaded. Please go back and try again.
+            No situation was provided. Please go back and describe your situation.
           </Text>
           <Pressable
             onPress={() => {
@@ -413,22 +470,22 @@ export default function EmergencyAssessmentScreen() {
     );
   }
 
-  const question = questions[currentIndex];
-  const total = questions.length;
-  const progressPercent = total > 0 ? (currentIndex / total) * 100 : 0;
-  const progressLabel = `Question ${currentIndex + 1} of ${total}`;
-  const isLastQuestion = currentIndex === questions.length - 1;
-  const nextLabel = isLastQuestion ? "Get Triage →" : "Next →";
+  const progressPercent = Math.min((questionNumber - 1) / MAX_QUESTIONS, 1) * 100;
+  const progressLabel = `Question ${questionNumber}`;
 
-  const scaleMin = question.scale_min ?? 0;
-  const scaleMax = question.scale_max ?? 10;
-  const choiceOptions = question.options ?? [];
+  const isLoading = fetchingNext || submitting;
+  const loadingText = submitting ? "Analyzing your responses..." : "Loading next question...";
 
-  const canProceed =
-    question.type === "text" ? true : currentAnswer !== null;
+  const canProceed = currentQuestion
+    ? currentQuestion.type === "text" ? true : currentAnswer !== null
+    : false;
 
-  const nextBtnBg = !canProceed || loading ? "#d4cfc9" : C.NAVY;
-  const nextBtnTextColor = !canProceed || loading ? "#a09890" : "#ffffff";
+  const nextBtnBg = !canProceed || isLoading ? "#d4cfc9" : C.NAVY;
+  const nextBtnTextColor = !canProceed || isLoading ? "#a09890" : "#ffffff";
+
+  const scaleMin = currentQuestion?.scale_min ?? 0;
+  const scaleMax = currentQuestion?.scale_max ?? 10;
+  const choiceOptions = currentQuestion?.options ?? [];
 
   return (
     <SafeAreaView {...swipeHandlers} style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
@@ -594,7 +651,7 @@ export default function EmergencyAssessmentScreen() {
             </Pressable>
           </View>
 
-          {/* Question card */}
+          {/* Question card / Loading card */}
           <Animated.View
             style={{
               marginHorizontal: 20,
@@ -616,100 +673,62 @@ export default function EmergencyAssessmentScreen() {
                 padding: 20,
               }}
             >
-              {/* Category label */}
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_600SemiBold",
-                  fontSize: 10,
-                  color: C.GOLD,
-                  letterSpacing: 2.5,
-                  textTransform: "uppercase",
-                  marginBottom: 12,
-                }}
-              >
-                {question.category}
-              </Text>
-
-              {/* Question text */}
-              <Text
-                style={{
-                  fontFamily: "PlayfairDisplay_400Regular",
-                  fontSize: 18,
-                  color: C.NAVY,
-                  lineHeight: 28,
-                  marginBottom: 4,
-                }}
-              >
-                {question.question}
-              </Text>
-
-              {/* Answer input */}
-              {question.type === "scale" ? (
-                <ScaleInput
-                  min={scaleMin}
-                  max={scaleMax}
-                  selected={currentAnswer}
-                  onSelect={setCurrentAnswer}
-                />
-              ) : question.type === "choice" ? (
-                <ChoiceInput
-                  options={choiceOptions}
-                  selected={currentAnswer}
-                  onSelect={setCurrentAnswer}
-                />
-              ) : (
-                <TextAnswerInput
-                  value={currentAnswer ?? ""}
-                  onChange={setCurrentAnswer}
-                />
-              )}
-
-              {/* Navigation row */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: 24,
-                }}
-              >
-                <Pressable
-                  onPress={handleSkip}
-                  disabled={loading}
-                  style={{ paddingVertical: 8, paddingHorizontal: 4 }}
+              {isLoading || !currentQuestion ? (
+                /* Loading state */
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: 40,
+                    gap: 16,
+                  }}
                 >
+                  <ActivityIndicator color={C.NAVY} size="large" />
                   <Text
                     style={{
                       fontFamily: "SourceSans3_400Regular",
-                      fontSize: 14,
-                      color: loading ? C.TEXT_HINT : C.TEXT_MUTED,
+                      fontSize: 15,
+                      color: C.TEXT_MUTED,
                     }}
                   >
-                    Skip
+                    {loadingText}
                   </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={handleNext}
-                  disabled={!canProceed || loading}
-                  style={{
-                    backgroundColor: nextBtnBg,
-                    paddingHorizontal: 22,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 8,
-                    shadowColor: "#1c3a5e",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: !canProceed || loading ? 0 : 0.3,
-                    shadowRadius: 8,
-                    elevation: !canProceed || loading ? 0 : 3,
-                  }}
-                >
-                  {loading ? (
-                    <>
-                      <ActivityIndicator color="#ffffff" size="small" />
+                </View>
+              ) : error ? (
+                /* Error state with retry / skip */
+                <View style={{ paddingVertical: 16 }}>
+                  <View
+                    style={{
+                      backgroundColor: "rgba(139,58,58,0.07)",
+                      borderRadius: 10,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: "rgba(139,58,58,0.2)",
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "SourceSans3_400Regular",
+                        fontSize: 13,
+                        color: C.DANGER,
+                        lineHeight: 19,
+                      }}
+                    >
+                      {error}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <Pressable
+                      onPress={handleRetry}
+                      style={{
+                        flex: 1,
+                        backgroundColor: C.NAVY,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        alignItems: "center",
+                      }}
+                    >
                       <Text
                         style={{
                           fontFamily: "SourceSans3_600SemiBold",
@@ -717,47 +736,154 @@ export default function EmergencyAssessmentScreen() {
                           color: "#ffffff",
                         }}
                       >
-                        Analyzing...
+                        Retry
                       </Text>
-                    </>
-                  ) : (
-                    <Text
+                    </Pressable>
+                    <Pressable
+                      onPress={handleSkipToTriage}
                       style={{
-                        fontFamily: "SourceSans3_600SemiBold",
-                        fontSize: 14,
-                        color: nextBtnTextColor,
+                        flex: 1,
+                        borderWidth: 1.5,
+                        borderColor: C.BORDER,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        alignItems: "center",
                       }}
                     >
-                      {nextLabel}
-                    </Text>
-                  )}
-                </Pressable>
-              </View>
-
-              {/* Inline error */}
-              {error ? (
-                <View
-                  style={{
-                    marginTop: 12,
-                    backgroundColor: "rgba(139,58,58,0.07)",
-                    borderRadius: 10,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: "rgba(139,58,58,0.2)",
-                  }}
-                >
+                      <Text
+                        style={{
+                          fontFamily: "SourceSans3_600SemiBold",
+                          fontSize: 14,
+                          color: C.TEXT_MUTED,
+                        }}
+                      >
+                        Skip to Triage
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                /* Question content */
+                <>
+                  {/* Category label */}
                   <Text
                     style={{
-                      fontFamily: "SourceSans3_400Regular",
-                      fontSize: 13,
-                      color: C.DANGER,
-                      lineHeight: 19,
+                      fontFamily: "SourceSans3_600SemiBold",
+                      fontSize: 10,
+                      color: C.GOLD,
+                      letterSpacing: 2.5,
+                      textTransform: "uppercase",
+                      marginBottom: 12,
                     }}
                   >
-                    {error}
+                    {currentQuestion.category}
                   </Text>
-                </View>
-              ) : null}
+
+                  {/* Question text */}
+                  <Text
+                    style={{
+                      fontFamily: "PlayfairDisplay_400Regular",
+                      fontSize: 18,
+                      color: C.NAVY,
+                      lineHeight: 28,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {currentQuestion.question}
+                  </Text>
+
+                  {/* Answer input */}
+                  {currentQuestion.type === "scale" ? (
+                    <ScaleInput
+                      min={scaleMin}
+                      max={scaleMax}
+                      selected={currentAnswer}
+                      onSelect={setCurrentAnswer}
+                    />
+                  ) : currentQuestion.type === "choice" ? (
+                    <ChoiceInput
+                      options={choiceOptions}
+                      selected={currentAnswer}
+                      onSelect={setCurrentAnswer}
+                    />
+                  ) : (
+                    <TextAnswerInput
+                      value={currentAnswer ?? ""}
+                      onChange={setCurrentAnswer}
+                    />
+                  )}
+
+                  {/* Navigation row */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginTop: 24,
+                    }}
+                  >
+                    <Pressable
+                      onPress={handleSkip}
+                      disabled={isLoading}
+                      style={{ paddingVertical: 8, paddingHorizontal: 4 }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: "SourceSans3_400Regular",
+                          fontSize: 14,
+                          color: isLoading ? C.TEXT_HINT : C.TEXT_MUTED,
+                        }}
+                      >
+                        Skip
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={handleNext}
+                      disabled={!canProceed || isLoading}
+                      style={{
+                        backgroundColor: nextBtnBg,
+                        paddingHorizontal: 22,
+                        paddingVertical: 12,
+                        borderRadius: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        shadowColor: "#1c3a5e",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: !canProceed || isLoading ? 0 : 0.3,
+                        shadowRadius: 8,
+                        elevation: !canProceed || isLoading ? 0 : 3,
+                      }}
+                    >
+                      {fetchingNext ? (
+                        <>
+                          <ActivityIndicator color="#ffffff" size="small" />
+                          <Text
+                            style={{
+                              fontFamily: "SourceSans3_600SemiBold",
+                              fontSize: 14,
+                              color: "#ffffff",
+                            }}
+                          >
+                            Loading...
+                          </Text>
+                        </>
+                      ) : (
+                        <Text
+                          style={{
+                            fontFamily: "SourceSans3_600SemiBold",
+                            fontSize: 14,
+                            color: nextBtnTextColor,
+                          }}
+                        >
+                          Next →
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              )}
             </View>
           </Animated.View>
         </ScrollView>
