@@ -4,6 +4,7 @@ import * as validateClaimRoutes from './routes/validate-claim.js';
 import * as emergencyCheckRoutes from './routes/emergency-check.js';
 import * as emergencyQuestionsRoutes from './routes/emergency-questions.js';
 import * as emergencyNextQuestionRoutes from './routes/emergency-next-question.js';
+import * as reviewsRoutes from './routes/reviews.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -17,6 +18,7 @@ validateClaimRoutes.register(app, app.fastify);
 emergencyCheckRoutes.register(app, app.fastify);
 emergencyQuestionsRoutes.register(app, app.fastify);
 emergencyNextQuestionRoutes.register(app, app.fastify);
+reviewsRoutes.register(app, app.fastify);
 
 await app.run();
 app.logger.info('Application running');

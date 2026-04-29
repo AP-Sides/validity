@@ -461,4 +461,122 @@ describe("API Integration Tests", () => {
     expect(typeof data.done).toBe("boolean");
     expect(data.question === null || typeof data.question === "object").toBe(true);
   });
+
+  // POST /api/reviews tests
+  test("POST /api/reviews - successful review submission with 200 response", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 5,
+        review: "Excellent service!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+    expect(typeof data.success).toBe("boolean");
+  });
+
+  test("POST /api/reviews - missing required rating field returns 400", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        review: "Good service",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/reviews - missing required review field returns 400", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 4,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/reviews - rating below minimum (1) returns 400", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 0,
+        review: "Bad service",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/reviews - rating above maximum (5) returns 400", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 6,
+        review: "Too good to be true",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/reviews - valid rating at minimum boundary (1)", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 1,
+        review: "Poor service",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
+
+  test("POST /api/reviews - valid rating at maximum boundary (5)", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 5,
+        review: "Outstanding!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
+
+  test("POST /api/reviews - middle rating (3) submission", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 3,
+        review: "Average experience",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
+
+  test("POST /api/reviews - with longer review text", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rating: 4,
+        review: "This service was quite good overall. The interface was intuitive and the response times were fast. I would recommend it to others.",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBeDefined();
+  });
 });
