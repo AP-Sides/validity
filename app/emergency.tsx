@@ -40,9 +40,9 @@ const EXAMPLE_CHIPS = [
 ];
 
 const LOADING_MESSAGES = [
-  "Assessing symptoms...",
-  "Evaluating severity...",
-  "Generating recommendation...",
+  "Analyzing your situation...",
+  "Preparing assessment...",
+  "Loading questions...",
 ];
 
 export default function EmergencyScreen() {
@@ -120,8 +120,8 @@ export default function EmergencyScreen() {
     setError(null);
     setLoading(true);
     try {
-      console.log("[Emergency] POST /api/emergency-check →", BASE_URL);
-      const response = await fetch(`${BASE_URL}/api/emergency-check`, {
+      console.log("[Emergency] POST /api/emergency-questions →", BASE_URL);
+      const response = await fetch(`${BASE_URL}/api/emergency-questions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ situation: situation.trim() }),
@@ -132,15 +132,18 @@ export default function EmergencyScreen() {
         throw new Error(`Server error ${response.status}`);
       }
       const data = await response.json();
-      console.log("[Emergency] API response received, recommendation:", data.recommendation);
+      console.log("[Emergency] Questions received, count:", Array.isArray(data.questions) ? data.questions.length : 0);
       router.push({
-        pathname: "/emergency-results",
-        params: { situation: situation.trim(), data: JSON.stringify(data) },
+        pathname: "/emergency-assessment",
+        params: {
+          situation: situation.trim(),
+          questions: JSON.stringify(data.questions),
+        },
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[Emergency] Fetch failed:", message);
-      setError("Couldn't get triage guidance. Check your connection and try again.");
+      setError("Couldn't load assessment questions. Check your connection and try again.");
     } finally {
       setLoading(false);
     }

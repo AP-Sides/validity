@@ -99,6 +99,10 @@ export default function RootLayout() {
                 />
                 <Stack.Screen name="emergency" options={{ headerShown: false }} />
                 <Stack.Screen
+                  name="emergency-assessment"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
                   name="emergency-results"
                   options={{
                     title: "Triage Result",
