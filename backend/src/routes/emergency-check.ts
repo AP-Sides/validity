@@ -170,9 +170,25 @@ export function register(app: App, fastify: FastifyInstance) {
         // Use fallback response if AI response was invalid or failed
         if (!triageResponse) {
           app.logger.info('Using fallback triage response');
+
+          // Detect severity based on situation keywords
+          const situationLower = situation.toLowerCase();
+          const highSeverityKeywords = [
+            'unconscious', 'not breathing', 'no pulse', 'unresponsive',
+            'severe', 'life-threatening', 'dying', 'critical', 'cardiac arrest',
+            'severe bleeding', 'choking', 'poisoning', 'severe burns',
+          ];
+          const lowSeverityKeywords = [
+            'small cut', 'minor', 'mild', 'slight', 'a bit', 'little',
+            'small wound', 'tiny', 'minor headache', 'minor pain',
+          ];
+
+          const isHighSeverity = highSeverityKeywords.some(keyword => situationLower.includes(keyword));
+          const isLowSeverity = lowSeverityKeywords.some(keyword => situationLower.includes(keyword));
+
           triageResponse = {
-            recommendation: 'GO_TO_CLINIC',
-            urgency_score: 5,
+            recommendation: isHighSeverity ? 'GO_TO_ER' : (isLowSeverity ? 'TREAT_AT_HOME' : 'GO_TO_CLINIC'),
+            urgency_score: isHighSeverity ? 8 : (isLowSeverity ? 2 : 5),
             confidence: 0.6,
             reasoning: 'Unable to perform AI-based assessment. Please consult a healthcare professional for accurate triage.',
             warning_signs: [

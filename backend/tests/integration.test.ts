@@ -231,6 +231,25 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("POST /api/emergency-check - with optional answers parameter", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        situation: "Patient has chest pain",
+        answers: [
+          { question: "How long have you had the pain?", answer: "30 minutes" },
+          { question: "On a scale of 1-10, how severe?", answer: "7" },
+        ],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.recommendation).toBeDefined();
+    expect(["GO_TO_ER", "GO_TO_CLINIC", "TREAT_AT_HOME"]).toContain(data.recommendation);
+    expect(data.urgency_score).toBeDefined();
+  });
+
   test("POST /api/emergency-check - high severity situation assessment", async () => {
     const res = await api("/api/emergency-check", {
       method: "POST",
