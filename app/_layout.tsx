@@ -86,6 +86,7 @@ export default function RootLayout() {
           <WidgetProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <Stack>
+                <Stack.Screen name="home" options={{ headerShown: false }} />
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen
                   name="results"
