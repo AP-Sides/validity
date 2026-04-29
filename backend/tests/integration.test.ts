@@ -754,6 +754,48 @@ describe("API Integration Tests", () => {
     }
   });
 
+  // POST /api/nutrition-myths/refresh tests
+  test("POST /api/nutrition-myths/refresh - successful refresh with 200 response", async () => {
+    const res = await api("/api/nutrition-myths/refresh", {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.myths)).toBe(true);
+    expect(typeof data.total).toBe("number");
+    expect(typeof data.newCount).toBe("number");
+  });
+
+  test("POST /api/nutrition-myths/refresh - myths have required fields", async () => {
+    const res = await api("/api/nutrition-myths/refresh", {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.myths && data.myths.length > 0) {
+      const myth = data.myths[0];
+      expect(myth.id).toBeDefined();
+      expect(myth.claim).toBeDefined();
+      expect(myth.verdict).toBeDefined();
+      expect(["BUSTED", "CONFIRMED", "COMPLICATED"]).toContain(myth.verdict);
+      expect(myth.one_liner).toBeDefined();
+      expect(myth.explanation).toBeDefined();
+      expect(Array.isArray(myth.studies)).toBe(true);
+    }
+  });
+
+  test("POST /api/nutrition-myths/refresh - response includes counts", async () => {
+    const res = await api("/api/nutrition-myths/refresh", {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.total).toBe("number");
+    expect(typeof data.newCount).toBe("number");
+    expect(data.total).toBeGreaterThanOrEqual(0);
+    expect(data.newCount).toBeGreaterThanOrEqual(0);
+  });
+
   // POST /api/fun-facts tests
   test("POST /api/fun-facts - successful request with medical category", async () => {
     const res = await api("/api/fun-facts", {
