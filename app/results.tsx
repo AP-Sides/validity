@@ -356,7 +356,10 @@ export default function ResultsScreen() {
   const [neutralPct, setNeutralPct] = useState(Number(data.neutral_pct) || 0);
   const [confidence, setConfidence] = useState(Number(data.confidence) || 0);
   const [verdict, setVerdict] = useState(data.verdict);
-  const [goDeeper, setGoDeeper] = useState<"idle" | "loading" | "done">("idle");
+  const [summary, setSummary] = useState(data.summary ?? "");
+  const [deeperRound, setDeeperRound] = useState(0);
+  const [deeperLoading, setDeeperLoading] = useState(false);
+  const [deeperError, setDeeperError] = useState("");
 
   const supportCount = studies.filter((s) => s.stance === "supports").length;
   const refuteCount = studies.filter((s) => s.stance === "refutes").length;
@@ -407,47 +410,52 @@ export default function ResultsScreen() {
   };
 
   const handleGoDeeper = useCallback(async () => {
-    if (goDeeper !== "idle") return;
+    if (deeperLoading || deeperRound >= 3) return;
     const excludeTitles = studies.map((s) => s.title);
-    console.log("[Validity] Go Deeper pressed, claim:", claim, "excluding", excludeTitles.length, "studies");
-    setGoDeeper("loading");
+    const offset = (deeperRound + 1) * 10;
+    console.log("[Validity] Go Deeper pressed — round:", deeperRound + 1, "offset:", offset, "claim:", claim, "excluding", excludeTitles.length, "studies");
+    setDeeperLoading(true);
+    setDeeperError("");
     try {
       const response = await fetch(`${BACKEND_URL}/api/validate-claim/deeper`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim, exclude_titles: excludeTitles }),
+        body: JSON.stringify({
+          claim,
+          exclude_titles: excludeTitles,
+          offset,
+          regenerate_summary: true,
+          all_studies_context: studies.map((s) => ({
+            title: s.title,
+            stance: s.stance,
+            key_finding: s.key_finding,
+          })),
+        }),
       });
       if (!response.ok) {
         const errText = await response.text();
         console.log("[Validity] Go Deeper error response:", response.status, errText);
-        setGoDeeper("idle");
+        setDeeperError("Scan failed — try again");
+        setDeeperLoading(false);
         return;
       }
       const result = await response.json();
       console.log("[Validity] Go Deeper response received, new studies:", result.studies?.length ?? 0);
       const newStudies: Study[] = result.studies ?? [];
-      if (newStudies.length === 0) {
-        setGoDeeper("done");
-        return;
-      }
       const merged = [...studies, ...newStudies];
-      setStudies(merged);
 
-      // Recompute weighted aggregates
-      const weightedSupporting = merged
-        .filter((s) => s.stance === "supports")
-        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
-      const weightedRefuting = merged
-        .filter((s) => s.stance === "refutes")
-        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
-      const weightedNeutral = merged
-        .filter((s) => s.stance === "neutral")
-        .reduce((acc, s) => acc + (Number(s.weight) || 0), 0);
-      const totalWeight = weightedSupporting + weightedRefuting + weightedNeutral;
+      if (newStudies.length > 0) {
+        setStudies(merged);
+      }
 
-      const newSupportingPct = totalWeight > 0 ? Math.round((weightedSupporting / totalWeight) * 100) : 0;
-      const newRefutingPct = totalWeight > 0 ? Math.round((weightedRefuting / totalWeight) * 100) : 0;
-      const newNeutralPct = totalWeight > 0 ? Math.round((weightedNeutral / totalWeight) * 100) : 0;
+      // Recompute weighted aggregates from merged array
+      const ws = merged.filter((s) => s.stance === "supports").reduce((a, s) => a + (s.weight || 0), 0);
+      const wr = merged.filter((s) => s.stance === "refutes").reduce((a, s) => a + (s.weight || 0), 0);
+      const wn = merged.filter((s) => s.stance === "neutral").reduce((a, s) => a + (s.weight || 0), 0);
+      const tw = ws + wr + wn || 1;
+      const newSupportingPct = Math.round((ws / tw) * 100);
+      const newRefutingPct = Math.round((wr / tw) * 100);
+      const newNeutralPct = Math.round((wn / tw) * 100);
       const newConfidence = Math.max(newSupportingPct, newRefutingPct, newNeutralPct);
       const newVerdict: ValidationResult["verdict"] =
         newSupportingPct > 50 ? "VALID" : newRefutingPct > 50 ? "INVALID" : "INCONCLUSIVE";
@@ -459,22 +467,37 @@ export default function ResultsScreen() {
       setNeutralPct(newNeutralPct);
       setConfidence(newConfidence);
       setVerdict(newVerdict);
-      setGoDeeper("idle");
+
+      if (result.summary && typeof result.summary === "string" && result.summary.trim().length > 0) {
+        setSummary(result.summary);
+      }
+
+      setDeeperRound((prev) => prev + 1);
+      setDeeperLoading(false);
     } catch (err) {
       console.log("[Validity] Go Deeper fetch error:", err);
-      setGoDeeper("idle");
+      setDeeperError("Scan failed — try again");
+      setDeeperLoading(false);
     }
-  }, [goDeeper, studies, claim]);
+  }, [deeperLoading, deeperRound, studies, claim]);
 
-  const summaryParts = splitSummaryAtMidpoint(data.summary ?? "");
+  const summaryParts = splitSummaryAtMidpoint(summary);
   const consensusText = summaryParts.first;
   const caveatsText = summaryParts.second;
 
   // Go Deeper button derived values
+  const goDeeperDisabled = deeperLoading || deeperRound >= 3;
+  const goDeeperOpacity = deeperLoading ? 0.6 : 1;
   const goDeeperLabel =
-    goDeeper === "loading" ? "Scanning..." : goDeeper === "done" ? "✓ Scanned" : "Go Deeper ↓";
-  const goDeeperDisabled = goDeeper !== "idle";
-  const goDeeperOpacity = goDeeper === "loading" ? 0.6 : 1;
+    deeperRound === 3
+      ? "✓ Max Depth"
+      : deeperLoading
+      ? "Scanning..."
+      : deeperRound === 0
+      ? "Go Deeper ↓"
+      : `Go Deeper ↓ (${3 - deeperRound} left)`;
+  const goDeeperIsMaxDepth = deeperRound >= 3;
+  const totalPapers = studies.length;
 
   return (
     <ScrollView
@@ -502,18 +525,17 @@ export default function ResultsScreen() {
           <Text style={styles.cardTitle}>Evidence Breakdown</Text>
           <Pressable
             onPress={() => {
-              console.log("[Validity] Go Deeper button pressed");
+              console.log("[Validity] Go Deeper button pressed, round:", deeperRound + 1);
               handleGoDeeper();
             }}
             disabled={goDeeperDisabled}
             style={[
               styles.goDeeperBtn,
-              goDeeper === "done" && styles.goDeeperBtnDone,
-              goDeeper === "idle" && styles.goDeeperBtnIdle,
+              goDeeperIsMaxDepth ? styles.goDeeperBtnDone : styles.goDeeperBtnIdle,
               { opacity: goDeeperOpacity },
             ]}
           >
-            {goDeeper === "loading" ? (
+            {deeperLoading ? (
               <View style={styles.goDeeperInner}>
                 <ActivityIndicator size="small" color={COLORS.navy} style={{ marginRight: 5 }} />
                 <Text style={styles.goDeeperText}>{goDeeperLabel}</Text>
@@ -522,7 +544,7 @@ export default function ResultsScreen() {
               <Text
                 style={[
                   styles.goDeeperText,
-                  goDeeper === "done" && styles.goDeeperTextDone,
+                  goDeeperIsMaxDepth && styles.goDeeperTextDone,
                 ]}
               >
                 {goDeeperLabel}
@@ -554,10 +576,18 @@ export default function ResultsScreen() {
             <Text style={styles.legendText}>{neutralPct}% Neutral</Text>
           </View>
         </View>
+        {/* Paper count */}
+        <Text style={styles.paperCount}>
+          Based on {totalPapers} peer-reviewed {totalPapers === 1 ? "paper" : "papers"}
+        </Text>
+        {/* Deeper error */}
+        {deeperError ? (
+          <Text style={styles.deeperError}>{deeperError}</Text>
+        ) : null}
       </View>
 
       {/* Critical Analysis Summary Card */}
-      {data.summary ? (
+      {summary ? (
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeaderBlock}>
             <Text style={styles.summaryTitle}>Critical Analysis</Text>
@@ -980,5 +1010,24 @@ const styles = StyleSheet.create({
     fontFamily: "SourceSans3_400Regular",
     lineHeight: 16,
     marginTop: 4,
+  },
+
+  // Paper count
+  paperCount: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
+    fontFamily: "SourceSans3_400Regular",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  // Deeper error
+  deeperError: {
+    fontSize: 11,
+    color: COLORS.red,
+    textAlign: "center",
+    marginTop: 6,
+    fontFamily: "SourceSans3_400Regular",
   },
 });
