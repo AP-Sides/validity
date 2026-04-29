@@ -88,8 +88,26 @@ export default function HomeScreen() {
     setStarRating(n);
   }, []);
 
-  const handleSubmitReview = useCallback(() => {
-    console.log("[Review] Submitted", { starRating, reviewText });
+  const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+
+  const handleSubmitReview = useCallback(async () => {
+    if (starRating === 0) return;
+    console.log("[Review] Submitting review", { starRating, reviewText });
+    try {
+      const response = await fetch(`${BASE_URL}/api/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: starRating, review: reviewText }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("[Review] Submit failed:", response.status, text);
+      } else {
+        console.log("[Review] Submit succeeded");
+      }
+    } catch (e) {
+      console.error("[Review] Submit failed:", e);
+    }
     setStarRating(0);
     setReviewText("");
     setThankYouVisible(true);
