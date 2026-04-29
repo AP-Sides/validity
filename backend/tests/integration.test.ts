@@ -177,4 +177,80 @@ describe("API Integration Tests", () => {
       expect(["supports", "refutes", "neutral"]).toContain(study.stance);
     }
   });
+
+  // POST /api/emergency-check tests
+  test("POST /api/emergency-check - successful triage assessment with 200 response", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient has chest pain and shortness of breath" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.recommendation).toBeDefined();
+    expect(["GO_TO_ER", "GO_TO_CLINIC", "TREAT_AT_HOME"]).toContain(data.recommendation);
+    expect(data.urgency_score).toBeDefined();
+    expect(typeof data.urgency_score).toBe("number");
+    expect(data.urgency_score).toBeGreaterThanOrEqual(1);
+    expect(data.urgency_score).toBeLessThanOrEqual(10);
+    expect(data.confidence).toBeDefined();
+    expect(typeof data.confidence).toBe("number");
+  });
+
+  test("POST /api/emergency-check - returns complete assessment fields", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient has mild headache" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.reasoning).toBeDefined();
+    expect(typeof data.reasoning).toBe("string");
+    expect(Array.isArray(data.warning_signs)).toBe(true);
+    expect(Array.isArray(data.home_treatment)).toBe(true);
+    expect(data.disclaimer).toBeDefined();
+    expect(typeof data.disclaimer).toBe("string");
+  });
+
+  test("POST /api/emergency-check - missing required situation field returns 400", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-check - empty situation string returns 400", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "" }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/emergency-check - high severity situation assessment", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient is unconscious and not breathing" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.recommendation).toBe("GO_TO_ER");
+    expect(data.urgency_score).toBeGreaterThan(5);
+  });
+
+  test("POST /api/emergency-check - minor issue assessment", async () => {
+    const res = await api("/api/emergency-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ situation: "Patient has a small cut on finger" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.urgency_score).toBeLessThan(7);
+  });
 });

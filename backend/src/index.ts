@@ -1,6 +1,7 @@
 import { createApplication } from "@specific-dev/framework";
 import * as schema from './db/schema/schema.js';
 import * as validateClaimRoutes from './routes/validate-claim.js';
+import * as emergencyCheckRoutes from './routes/emergency-check.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -11,6 +12,7 @@ export type App = typeof app;
 // Register routes - add your route modules here
 // IMPORTANT: Always use registration functions to avoid circular dependency issues
 validateClaimRoutes.register(app, app.fastify);
+emergencyCheckRoutes.register(app, app.fastify);
 
 await app.run();
 app.logger.info('Application running');
