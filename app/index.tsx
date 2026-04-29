@@ -311,9 +311,7 @@ export default function HomeScreen() {
                     flex: 1,
                     textAlign: "center",
                   }}
-                >
-                  pubmed-validator.ai
-                </Text>
+                >Check for Validity</Text>
                 <View style={{ width: 42 }} />
               </View>
 
