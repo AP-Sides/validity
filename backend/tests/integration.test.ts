@@ -77,4 +77,65 @@ describe("API Integration Tests", () => {
     expect(data.weighted_neutral).toBeDefined();
     expect(data.total_weight).toBeDefined();
   });
+
+  test("POST /api/validate-claim/deeper - successful validation", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claim: "The Earth is round" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.studies)).toBe(true);
+    expect(data.new_count).toBeDefined();
+    expect(typeof data.new_count).toBe("number");
+  });
+
+  test("POST /api/validate-claim/deeper - missing required field", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/validate-claim/deeper - empty claim string", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claim: "" }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/validate-claim/deeper - with exclude_titles parameter", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "Water boils at 100 degrees Celsius",
+        exclude_titles: ["Study A", "Study B"],
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(Array.isArray(data.studies)).toBe(true);
+    expect(data.new_count).toBeDefined();
+  });
+
+  test("POST /api/validate-claim/deeper - response includes study details", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claim: "Vitamin C prevents colds" }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    if (data.studies && data.studies.length > 0) {
+      const study = data.studies[0];
+      expect(study.title).toBeDefined();
+      expect(["supports", "refutes", "neutral"]).toContain(study.stance);
+    }
+  });
 });

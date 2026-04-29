@@ -1,24 +1,17 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { gateway } from '@specific-dev/framework';
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { App } from '../index.js';
+import {
+  type PaperMetadata,
+  paperClassificationSchema,
+  type AIClassification,
+  computePaperWeight,
+  classifyPapersWithAI,
+  getVenuePrestige,
+} from './validate-claim-utils.js';
 
 interface ValidateClaimBody {
   claim: string;
-}
-
-interface PaperMetadata {
-  title: string;
-  authors: string[];
-  year?: number;
-  journal?: string;
-  doi?: string;
-  pmid?: string;
-  semanticScholarId?: string;
-  abstract?: string;
-  citationCount?: number;
-  isPeerReviewed?: boolean;
 }
 
 interface Study {
@@ -52,18 +45,6 @@ interface ValidateClaimResponse {
   total_weight: number;
   studies: Study[];
 }
-
-const paperClassificationSchema = z.object({
-  papers: z.array(
-    z.object({
-      index: z.number(),
-      stance: z.enum(['supports', 'refutes', 'neutral']),
-      key_finding: z.string(),
-      quote: z.string(),
-    })
-  ),
-  summary: z.string(),
-});
 
 export function register(app: App, fastify: FastifyInstance) {
   fastify.post('/api/validate-claim', {
@@ -300,6 +281,190 @@ export function register(app: App, fastify: FastifyInstance) {
       throw error;
     }
   });
+
+  // Deeper endpoint - papers 11-20
+  fastify.post('/api/validate-claim/deeper', {
+    schema: {
+      description: 'Validate a scientific claim against deeper papers (11-20 in relevance)',
+      tags: ['validation'],
+      body: {
+        type: 'object',
+        required: ['claim'],
+        properties: {
+          claim: { type: 'string', minLength: 1 },
+          exclude_titles: {
+            type: 'array',
+            items: { type: 'string' },
+            default: [],
+          },
+        },
+      },
+      response: {
+        200: {
+          description: 'Deeper papers validation result',
+          type: 'object',
+          properties: {
+            studies: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  authors: { type: 'string' },
+                  year: { type: 'number' },
+                  journal: { type: 'string' },
+                  stance: { type: 'string', enum: ['supports', 'refutes', 'neutral'] },
+                  key_finding: { type: 'string' },
+                  quote: { type: 'string' },
+                  url: { type: 'string' },
+                  weight: { type: 'number' },
+                  citation_count: { type: 'number' },
+                  is_peer_reviewed: { type: 'boolean' },
+                },
+              },
+            },
+            new_count: { type: 'number' },
+          },
+        },
+        400: {
+          description: 'Bad request',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+        500: {
+          description: 'Server error',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (
+    request: FastifyRequest<{ Body: { claim: string; exclude_titles?: string[] } }>,
+    reply: FastifyReply
+  ) => {
+    const { claim, exclude_titles = [] } = request.body;
+
+    app.logger.info({ claim, excludeCount: exclude_titles.length }, 'Starting deeper claim validation');
+
+    try {
+      // Step 1: Fetch papers 11-20 from both sources in parallel
+      const [semanticScholarPapers, pubmedPapers] = await Promise.all([
+        fetchSemanticScholarWithOffset(claim, 10, 10, app),
+        fetchPubMedWithOffset(claim, 10, 10, app),
+      ]);
+
+      app.logger.info(
+        { semanticScholarCount: semanticScholarPapers.length, pubmedCount: pubmedPapers.length },
+        'Fetched deeper papers from APIs'
+      );
+
+      // Step 2: Combine and deduplicate papers
+      let allPapers = [...semanticScholarPapers, ...pubmedPapers];
+
+      // Filter out papers that match exclude_titles
+      allPapers = allPapers.filter((paper) => {
+        const titleLower = paper.title.toLowerCase();
+        return !exclude_titles.some(
+          (excludeTitle) => wordSimilarity(titleLower, excludeTitle.toLowerCase()) > 0.7
+        );
+      });
+
+      // Fallback: if both APIs returned nothing, provide sample papers
+      if (allPapers.length === 0) {
+        app.logger.warn('No deeper papers from APIs, returning empty result');
+        return {
+          studies: [],
+          new_count: 0,
+        };
+      }
+
+      const deduplicatedPapers = deduplicatePapers(allPapers);
+      const topPapers = deduplicatedPapers.slice(0, 10);
+
+      app.logger.info({ totalPapers: topPapers.length }, 'After deduplication and top 10 filter');
+
+      // Step 3: AI Classification
+      const aiClassification = await classifyPapersWithAI(claim, topPapers, app);
+
+      if (!aiClassification) {
+        return reply.status(500).send({ error: 'AI analysis failed' });
+      }
+
+      // Step 4: Compute weights for each paper
+      const papersWithWeights = topPapers.map((paper, index) => {
+        // Find the AI result for this paper, checking both exact index and fallback
+        let aiResult = aiClassification.papers.find((p) => p.index === index);
+
+        // If exact index not found and we have exactly as many results as papers, match by position
+        if (!aiResult && aiClassification.papers.length === topPapers.length) {
+          aiResult = aiClassification.papers[index];
+        }
+
+        const weight = computePaperWeight(paper);
+
+        return {
+          paper,
+          weight,
+          stance: (aiResult?.stance as any) || 'neutral',
+          key_finding: aiResult?.key_finding || '',
+          quote: aiResult?.quote || '',
+        };
+      });
+
+      // Step 5: Build study objects
+      const studies: Study[] = papersWithWeights.map((pw) => {
+        const authors =
+          pw.paper.authors.length > 2
+            ? `${pw.paper.authors[0]}, ${pw.paper.authors[1]} et al.`
+            : pw.paper.authors.join(', ');
+
+        let url = '#';
+        if (pw.paper.doi) {
+          url = `https://doi.org/${pw.paper.doi}`;
+        } else if (pw.paper.pmid) {
+          url = `https://pubmed.ncbi.nlm.nih.gov/${pw.paper.pmid}/`;
+        } else if (pw.paper.semanticScholarId) {
+          url = `https://www.semanticscholar.org/paper/${pw.paper.semanticScholarId}`;
+        }
+
+        const prestige = getVenuePrestige(pw.paper.journal || '');
+        const is_peer_reviewed = prestige >= 0.8;
+
+        return {
+          title: pw.paper.title,
+          authors,
+          year: pw.paper.year || new Date().getFullYear(),
+          journal: pw.paper.journal || 'Unknown Journal',
+          stance: pw.stance as 'supports' | 'refutes' | 'neutral',
+          key_finding: pw.key_finding,
+          quote: pw.quote,
+          url,
+          weight: Math.round(pw.weight * 100) / 100,
+          citation_count: pw.paper.citationCount || 0,
+          is_peer_reviewed,
+        };
+      });
+
+      const response = {
+        studies,
+        new_count: studies.length,
+      };
+
+      app.logger.info(
+        { studyCount: response.new_count },
+        'Deeper claim validation completed successfully'
+      );
+
+      return response;
+    } catch (error) {
+      app.logger.error({ err: error, claim }, 'Deeper claim validation failed');
+      throw error;
+    }
+  });
 }
 
 function generateFallbackPapers(claim: string): PaperMetadata[] {
@@ -336,9 +501,18 @@ function generateFallbackPapers(claim: string): PaperMetadata[] {
 }
 
 async function fetchSemanticScholar(claim: string, app: App): Promise<PaperMetadata[]> {
+  return fetchSemanticScholarWithOffset(claim, 0, 7, app);
+}
+
+async function fetchSemanticScholarWithOffset(
+  claim: string,
+  offset: number,
+  limit: number,
+  app: App
+): Promise<PaperMetadata[]> {
   try {
     const query = encodeURIComponent(claim);
-    const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${query}&limit=7&fields=title,authors,year,citationCount,journal,externalIds,abstract`;
+    const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${query}&offset=${offset}&limit=${limit}&fields=title,authors,year,citationCount,journal,externalIds,abstract`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -369,7 +543,7 @@ async function fetchSemanticScholar(claim: string, app: App): Promise<PaperMetad
       }
     }
 
-    app.logger.debug({ count: papers.length }, 'Fetched papers from Semantic Scholar');
+    app.logger.debug({ count: papers.length, offset }, 'Fetched papers from Semantic Scholar');
     return papers;
   } catch (error) {
     app.logger.warn({ err: error }, 'Semantic Scholar fetch failed, proceeding with other sources');
@@ -378,11 +552,20 @@ async function fetchSemanticScholar(claim: string, app: App): Promise<PaperMetad
 }
 
 async function fetchPubMed(claim: string, app: App): Promise<PaperMetadata[]> {
+  return fetchPubMedWithOffset(claim, 0, 7, app);
+}
+
+async function fetchPubMedWithOffset(
+  claim: string,
+  retstart: number,
+  retmax: number,
+  app: App
+): Promise<PaperMetadata[]> {
   try {
     const query = encodeURIComponent(claim);
 
     // Step 1: Search for papers
-    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${query}&retmax=7&retmode=json`;
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${query}&retstart=${retstart}&retmax=${retmax}&retmode=json`;
 
     const controller1 = new AbortController();
     const timeoutId1 = setTimeout(() => controller1.abort(), 8000);
@@ -420,7 +603,7 @@ async function fetchPubMed(claim: string, app: App): Promise<PaperMetadata[]> {
     const xmlText = await fetchResponse.text();
     const papers = parsePubMedXML(xmlText, app);
 
-    app.logger.debug({ count: papers.length }, 'Fetched papers from PubMed');
+    app.logger.debug({ count: papers.length, retstart }, 'Fetched papers from PubMed');
     return papers;
   } catch (error) {
     app.logger.warn({ err: error }, 'PubMed fetch failed, proceeding with other sources');
@@ -527,182 +710,3 @@ function deduplicatePapers(papers: PaperMetadata[]): PaperMetadata[] {
   return unique;
 }
 
-interface AIClassification {
-  papers: Array<{
-    index: number;
-    stance: 'supports' | 'refutes' | 'neutral';
-    key_finding: string;
-    quote: string;
-  }>;
-  summary: string;
-}
-
-async function classifyPapersWithAI(
-  claim: string,
-  papers: PaperMetadata[],
-  app: App
-): Promise<AIClassification | null> {
-  try {
-    app.logger.debug({ paperCount: papers.length }, 'Starting AI paper classification');
-
-    const paperTexts = papers
-      .map(
-        (paper, index) =>
-          `Paper ${index}: Title: ${paper.title}\nAbstract: ${paper.abstract || 'No abstract available'}`
-      )
-      .join('\n\n');
-
-    const systemPrompt = `You are a scientific evidence classifier. Analyze each paper's stance toward the given claim and provide a concise summary of the overall evidence. For each paper, determine if it supports, refutes, or is neutral toward the claim.`;
-
-    const userPrompt = `Claim: "${claim}"
-
-Papers to classify:
-${paperTexts}
-
-For each paper (indexed 0 through ${papers.length - 1}), return a JSON object with:
-- index: the paper's index number (0 to ${papers.length - 1})
-- stance: "supports", "refutes", or "neutral"
-- key_finding: 1-2 sentence summary of the relevant finding
-- quote: A short quote or paraphrase from the abstract
-
-Also provide an overall 2-3 sentence summary of what the evidence collectively suggests about the claim.`;
-
-    const { object } = await generateObject({
-      model: gateway('openai/gpt-4o-mini'),
-      schema: paperClassificationSchema,
-      system: systemPrompt,
-      prompt: userPrompt,
-    });
-
-    app.logger.debug({ paperCount: object.papers.length }, 'AI classification completed');
-
-    return object;
-  } catch (error) {
-    app.logger.error({ err: error }, 'AI classification failed');
-    return null;
-  }
-}
-
-function getRecencyScore(year?: number): number {
-  if (!year) return 0.5;
-
-  const currentYear = new Date().getFullYear();
-  const age = currentYear - year;
-
-  if (age <= 5) return 1.0;
-  if (age <= 10) return 0.8;
-  if (age <= 15) return 0.6;
-  if (age <= 20) return 0.45;
-  return 0.3;
-}
-
-function getCitationScore(citationCount: number): number {
-  if (citationCount >= 500) return 1.0;
-  if (citationCount >= 200) return 0.9;
-  if (citationCount >= 50) return 0.75;
-  if (citationCount >= 10) return 0.6;
-  if (citationCount >= 1) return 0.5;
-  return 0.4;
-}
-
-function getVenuePrestige(journal: string): number {
-  const journalLower = (journal || '').toLowerCase();
-
-  const topTierKeywords = [
-    'nature',
-    'science',
-    'new england journal',
-    'nejm',
-    'lancet',
-    'jama',
-    'cell',
-    'bmj',
-    'pnas',
-    'plos medicine',
-    'annals of internal medicine',
-    'cochrane',
-  ];
-
-  const highQualityKeywords = [
-    'journal of',
-    'american journal',
-    'european journal',
-    'international journal',
-    'frontiers in',
-    'plos one',
-    'scientific reports',
-  ];
-
-  const preprintKeywords = ['arxiv', 'biorxiv', 'medrxiv', 'ssrn', 'researchgate'];
-
-  for (const keyword of topTierKeywords) {
-    if (journalLower.includes(keyword)) return 1.0;
-  }
-
-  for (const keyword of highQualityKeywords) {
-    if (journalLower.includes(keyword)) return 0.8;
-  }
-
-  for (const keyword of preprintKeywords) {
-    if (journalLower.includes(keyword)) return 0.55;
-  }
-
-  return !journal ? 0.5 : 0.7;
-}
-
-function getPublicationTypeScore(title: string, abstract: string): number {
-  const text = (title + ' ' + abstract).toLowerCase();
-
-  if (
-    text.includes('meta-analysis') ||
-    text.includes('systematic review') ||
-    text.includes('randomized controlled trial')
-  ) {
-    return 1.0;
-  }
-
-  if (text.includes('cohort study') || text.includes('clinical trial') || text.includes('prospective study')) {
-    return 0.9;
-  }
-
-  return 0.8;
-}
-
-function getAuthorCountScore(authors: string[]): number {
-  const count = authors.length;
-  if (count >= 5) return 1.0;
-  if (count >= 3) return 0.95;
-  return 0.85;
-}
-
-function computePaperWeight(paper: PaperMetadata): number {
-  const recency = getRecencyScore(paper.year);
-  const citations = getCitationScore(paper.citationCount || 0);
-  const prestige = getVenuePrestige(paper.journal || '');
-  const pubType = getPublicationTypeScore(paper.title, paper.abstract || '');
-  const authors = getAuthorCountScore(paper.authors);
-
-  let raw = recency * 0.3 + citations * 0.25 + prestige * 0.25 + pubType * 0.12 + authors * 0.08;
-
-  // Sanity clamp 1: Low-quality old papers
-  if (
-    (paper.citationCount || 0) === 0 &&
-    prestige === 0.5 &&
-    (paper.year || 2000) < 2010
-  ) {
-    raw = Math.min(raw, 0.35);
-  }
-
-  // Sanity clamp 2: High-citation meta-analyses
-  const text = (paper.title + ' ' + (paper.abstract || '')).toLowerCase();
-  if (
-    (text.includes('cochrane') || (text.includes('meta-analysis') && prestige === 1.0)) &&
-    (paper.citationCount || 0) > 100
-  ) {
-    raw = Math.max(raw, 0.8);
-  }
-
-  // Final clamp
-  const weight = Math.max(0, Math.min(raw, 1.0));
-  return Math.round(weight * 100) / 100;
-}
