@@ -313,9 +313,7 @@ export default function EmergencyScreen() {
                     flex: 1,
                     textAlign: "center",
                   }}
-                >
-                  emergency-triage.ai
-                </Text>
+                >Check for severity</Text>
                 <View style={{ width: 42 }} />
               </View>
 
