@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { generateText } from 'ai';
+import { gateway } from '@specific-dev/framework';
 import type { App } from '../index.js';
 import {
   type PaperMetadata,
@@ -125,26 +127,45 @@ export function register(app: App, fastify: FastifyInstance) {
     app.logger.info({ claim }, 'Starting claim validation');
 
     try {
-      // Step 1: Fetch papers from both sources in parallel
-      const [semanticScholarPapers, pubmedPapers] = await Promise.all([
-        fetchSemanticScholar(claim, app),
-        fetchPubMed(claim, app),
-      ]);
+      // Step 1: Classify the claim domain
+      const domain = await classifyClaimDomain(claim, app);
+      app.logger.info({ domain }, 'Classified claim domain');
+
+      // Step 2: Select sources based on domain and fetch in parallel
+      const fetchPromises: Promise<PaperMetadata[]>[] = [
+        fetchSemanticScholarWithOffset(claim, 0, 10, app),
+      ];
+
+      if (domain === 'medicine') {
+        fetchPromises.push(fetchPubMedWithOffset(claim, 0, 10, app));
+      } else if (domain === 'physics_cs_math_ai') {
+        fetchPromises.push(fetchArxiv(claim, 10, 0, app));
+      } else if (domain === 'general' || domain === 'social_science') {
+        fetchPromises.push(fetchOpenAlex(claim, 10, 0, app));
+        fetchPromises.push(fetchCrossRef(claim, 5, 0, app));
+      }
+
+      const results = await Promise.allSettled(fetchPromises);
+      let allPapers: PaperMetadata[] = [];
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allPapers.push(...result.value);
+        }
+      }
 
       app.logger.info(
-        { semanticScholarCount: semanticScholarPapers.length, pubmedCount: pubmedPapers.length },
-        'Fetched papers from APIs'
+        { domain, totalPapers: allPapers.length },
+        'Fetched papers from domain-specific sources'
       );
 
-      // Step 2: Combine and deduplicate papers
-      let allPapers = [...semanticScholarPapers, ...pubmedPapers];
-
-      // Fallback: if both APIs returned nothing, provide sample papers for testing/fallback
+      // Step 3: Fallback if no papers found
       if (allPapers.length === 0) {
         app.logger.warn('No papers from APIs, using fallback papers');
         allPapers = generateFallbackPapers(claim);
       }
 
+      // Step 4: Deduplicate papers
       const deduplicatedPapers = deduplicatePapers(allPapers);
       let topPapers = deduplicatedPapers.slice(0, 10);
 
@@ -156,7 +177,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       app.logger.info({ totalPapers: topPapers.length }, 'After deduplication and top 10 filter');
 
-      // Step 4: AI Classification
+      // Step 5: AI Classification
       const aiClassification = await classifyPapersWithAI(claim, topPapers, app);
 
       // Fallback classification if AI fails
@@ -409,21 +430,39 @@ export function register(app: App, fastify: FastifyInstance) {
     );
 
     try {
-      // Step 1: Fetch papers with offset from both sources in parallel
-      const [semanticScholarPapers, pubmedPapers] = await Promise.all([
+      // Step 1: Classify the claim domain
+      const domain = await classifyClaimDomain(claim, app);
+      app.logger.info({ domain }, 'Classified claim domain for deeper search');
+
+      // Step 2: Select sources based on domain and fetch with offset
+      const fetchPromises: Promise<PaperMetadata[]>[] = [
         fetchSemanticScholarWithOffset(claim, offset, 10, app),
-        fetchPubMedWithOffset(claim, offset, 10, app),
-      ]);
+      ];
+
+      if (domain === 'medicine') {
+        fetchPromises.push(fetchPubMedWithOffset(claim, offset, 10, app));
+      } else if (domain === 'physics_cs_math_ai') {
+        fetchPromises.push(fetchArxiv(claim, 10, offset, app));
+      } else if (domain === 'general' || domain === 'social_science') {
+        fetchPromises.push(fetchOpenAlex(claim, 10, offset, app));
+        fetchPromises.push(fetchCrossRef(claim, 5, offset, app));
+      }
+
+      const results = await Promise.allSettled(fetchPromises);
+      let allPapers: PaperMetadata[] = [];
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allPapers.push(...result.value);
+        }
+      }
 
       app.logger.info(
-        { semanticScholarCount: semanticScholarPapers.length, pubmedCount: pubmedPapers.length },
-        'Fetched deeper papers from APIs'
+        { domain, totalPapers: allPapers.length },
+        'Fetched deeper papers from domain-specific sources'
       );
 
-      // Step 2: Combine and deduplicate papers
-      let allPapers = [...semanticScholarPapers, ...pubmedPapers];
-
-      // Filter out papers that match exclude_titles using strict normalized comparison (>80% similarity)
+      // Step 3: Filter out papers that match exclude_titles using strict normalized comparison (>80% similarity)
       allPapers = allPapers.filter((paper) => {
         const normalizedPaperTitle = normalizeTitleForComparison(paper.title);
         return !exclude_titles.some((excludeTitle) => {
@@ -447,7 +486,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       app.logger.info({ totalPapers: topPapers.length }, 'After deduplication and top 10 filter');
 
-      // Step 3: AI Classification
+      // Step 4: AI Classification
       const aiClassification = await classifyPapersWithAI(claim, topPapers, app);
 
       // Fallback classification if AI fails
@@ -570,6 +609,207 @@ export function register(app: App, fastify: FastifyInstance) {
       throw error;
     }
   });
+}
+
+// Domain classification
+type DomainCategory = 'medicine' | 'physics_cs_math_ai' | 'social_science' | 'general';
+
+async function classifyClaimDomain(claim: string, app: App): Promise<DomainCategory> {
+  try {
+    const { text } = await generateText({
+      model: gateway('openai/gpt-4o-mini'),
+      system: 'You are a domain classifier. Classify the given claim into exactly one category: medicine, physics_cs_math_ai, social_science, or general. Reply with only the category name, nothing else.',
+      prompt: `Classify this claim: "${claim}"`,
+    });
+
+    const domain = text.trim().toLowerCase();
+    if (['medicine', 'physics_cs_math_ai', 'social_science', 'general'].includes(domain)) {
+      app.logger.debug({ domain }, 'Classified claim domain');
+      return domain as DomainCategory;
+    }
+    return 'general';
+  } catch (error) {
+    app.logger.warn({ err: error }, 'Domain classification failed, defaulting to general');
+    return 'general';
+  }
+}
+
+// arXiv fetcher
+async function fetchArxiv(claim: string, limit: number = 10, offset: number = 0, app: App): Promise<PaperMetadata[]> {
+  try {
+    const query = encodeURIComponent(claim);
+    const start = offset;
+    const url = `https://export.arxiv.org/api/query?search_query=all:${query}&start=${start}&max_results=${limit}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      app.logger.warn({ status: response.status }, 'arXiv API returned non-OK status');
+      return [];
+    }
+
+    const text = await response.text();
+    const papers: PaperMetadata[] = [];
+
+    // Parse Atom XML
+    const entryMatches = text.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+    for (const entry of entryMatches) {
+      const titleMatch = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/);
+      const title = titleMatch ? titleMatch[1].trim() : 'Unknown Title';
+
+      const summaryMatch = entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/);
+      const abstract = summaryMatch ? summaryMatch[1].trim() : undefined;
+
+      const idMatch = entry.match(/<id>(https:\/\/arxiv\.org\/abs\/([\d.]+))/);
+      const semanticScholarId = idMatch ? idMatch[2] : undefined;
+
+      const publishedMatch = entry.match(/<published>([\d-]+)/);
+      const year = publishedMatch ? parseInt(publishedMatch[1]) : undefined;
+
+      const authorMatches = entry.match(/<author>[\s\S]*?<\/author>/g) || [];
+      const authors = authorMatches.slice(0, 5).map((auth) => {
+        const nameMatch = auth.match(/<name>([\s\S]*?)<\/name>/);
+        return nameMatch ? nameMatch[1].trim() : 'Unknown';
+      });
+
+      papers.push({
+        title,
+        authors,
+        year,
+        journal: 'arXiv',
+        abstract,
+        semanticScholarId,
+        citationCount: 0,
+      });
+    }
+
+    app.logger.debug({ count: papers.length }, 'Fetched papers from arXiv');
+    return papers;
+  } catch (error) {
+    app.logger.warn({ err: error }, 'arXiv fetch failed');
+    return [];
+  }
+}
+
+// OpenAlex fetcher
+async function fetchOpenAlex(claim: string, limit: number = 10, offset: number = 0, app: App): Promise<PaperMetadata[]> {
+  try {
+    const query = encodeURIComponent(claim);
+    const page = Math.floor(offset / limit) + 1;
+    const url = `https://api.openalex.org/works?search=${query}&per-page=${limit}&page=${page}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Validity-App/1.0 (research tool)' },
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      app.logger.warn({ status: response.status }, 'OpenAlex API returned non-OK status');
+      return [];
+    }
+
+    const data = (await response.json()) as any;
+    const papers: PaperMetadata[] = [];
+
+    if (data.results && Array.isArray(data.results)) {
+      for (const work of data.results) {
+        let abstract = '';
+        if (work.abstract_inverted_index && Object.keys(work.abstract_inverted_index).length > 0) {
+          const flatPositions = Object.values(work.abstract_inverted_index).flat() as number[];
+          const maxPosition = Math.max(...flatPositions);
+          const words: string[] = Array(maxPosition + 1).fill('');
+          for (const [word, positions] of Object.entries(work.abstract_inverted_index)) {
+            for (const pos of positions as number[]) {
+              words[pos] = word;
+            }
+          }
+          abstract = words.join(' ');
+        }
+
+        const authors = work.authorships?.slice(0, 5).map((auth: any) => auth.author?.display_name || 'Unknown') || [];
+        const doi = work.doi?.replace('https://doi.org/', '');
+        const venue = work.primary_location?.source?.display_name || 'OpenAlex';
+
+        papers.push({
+          title: work.title || 'Unknown Title',
+          authors,
+          year: work.publication_year,
+          journal: venue,
+          abstract: abstract || undefined,
+          doi,
+          citationCount: work.cited_by_count || 0,
+        });
+      }
+    }
+
+    app.logger.debug({ count: papers.length }, 'Fetched papers from OpenAlex');
+    return papers;
+  } catch (error) {
+    app.logger.warn({ err: error }, 'OpenAlex fetch failed');
+    return [];
+  }
+}
+
+// CrossRef fetcher
+async function fetchCrossRef(claim: string, limit: number = 10, offset: number = 0, app: App): Promise<PaperMetadata[]> {
+  try {
+    const query = encodeURIComponent(claim);
+    const url = `https://api.crossref.org/works?query=${query}&rows=${limit}&offset=${offset}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Validity-App/1.0 (research tool; mailto:validity@app.com)' },
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      app.logger.warn({ status: response.status }, 'CrossRef API returned non-OK status');
+      return [];
+    }
+
+    const data = (await response.json()) as any;
+    const papers: PaperMetadata[] = [];
+
+    if (data.message?.items && Array.isArray(data.message.items)) {
+      for (const item of data.message.items) {
+        let abstract = item.abstract || '';
+        // Strip HTML tags from abstract
+        abstract = abstract.replace(/<[^>]*>/g, '');
+
+        const authors = item.author?.slice(0, 5).map((auth: any) => `${auth.given || ''} ${auth.family || ''}`.trim()) || [];
+        const year = item.published?.['date-parts']?.[0]?.[0];
+        const doi = item.DOI;
+        const venue = item['container-title']?.[0] || 'CrossRef';
+
+        papers.push({
+          title: item.title?.[0] || 'Unknown Title',
+          authors,
+          year,
+          journal: venue,
+          abstract: abstract || undefined,
+          doi,
+          citationCount: item['is-referenced-by-count'] || 0,
+        });
+      }
+    }
+
+    app.logger.debug({ count: papers.length }, 'Fetched papers from CrossRef');
+    return papers;
+  } catch (error) {
+    app.logger.warn({ err: error }, 'CrossRef fetch failed');
+    return [];
+  }
 }
 
 function generateFallbackPapers(claim: string): PaperMetadata[] {
