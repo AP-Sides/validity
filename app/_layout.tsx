@@ -88,6 +88,7 @@ export default function RootLayout() {
               <Stack>
                 <Stack.Screen name="home" options={{ headerShown: false }} />
                 <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="analyzer" options={{ headerShown: false }} />
                 <Stack.Screen
                   name="results"
                   options={{

@@ -67,10 +67,10 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
   }, [visible, translateX, overlayOpacity]);
 
   const isHome = pathname === "/home";
-  const isAnalyzer = pathname === "/" || pathname === "/index" || pathname === "";
+  const isAnalyzer = pathname === "/analyzer";
   const isEmergency = pathname === "/emergency";
 
-  const handleNavigate = (route: "/home" | "/" | "/emergency") => {
+  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency") => {
     console.log("[AppDrawer] Menu item tapped, navigating to:", route);
     onClose();
     setTimeout(() => {
@@ -238,7 +238,7 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
 
             {/* Menu item: Hypothesis Analyzer */}
             <Pressable
-              onPress={() => handleNavigate("/")}
+              onPress={() => handleNavigate("/analyzer")}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
