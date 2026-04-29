@@ -97,6 +97,17 @@ export default function RootLayout() {
                     headerShadowVisible: false,
                   }}
                 />
+                <Stack.Screen name="emergency" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="emergency-results"
+                  options={{
+                    title: "Triage Result",
+                    headerBackTitle: "Back",
+                    headerTintColor: "#1c3a5e",
+                    headerStyle: { backgroundColor: "#faf9f7" },
+                    headerShadowVisible: false,
+                  }}
+                />
               </Stack>
               <SystemBars style="dark" />
             </GestureHandlerRootView>

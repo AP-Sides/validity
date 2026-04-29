@@ -31,22 +31,22 @@ const C = {
 
 const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
 
-const EXAMPLE_CLAIMS = [
-  "Creatine improves muscle strength",
-  "Meditation reduces anxiety",
-  "Coffee increases productivity",
-  "Vitamin D deficiency causes depression",
-  "Exercise improves cognitive function",
+const EXAMPLE_CHIPS = [
+  "Fell down stairs, leg pain 8/10",
+  "Chest tightness for 2 hours",
+  "Deep cut on hand, bleeding",
+  "High fever for 3 days",
+  "Twisted ankle, mild swelling",
 ];
 
 const LOADING_MESSAGES = [
-  "Searching academic databases...",
-  "Analyzing evidence...",
-  "Generating verdict...",
+  "Assessing symptoms...",
+  "Evaluating severity...",
+  "Generating recommendation...",
 ];
 
-export default function HomeScreen() {
-  const [claim, setClaim] = useState("");
+export default function EmergencyScreen() {
+  const [situation, setSituation] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -114,51 +114,50 @@ export default function HomeScreen() {
     };
   }, [loading, loadingMsgOpacity]);
 
-  const handleValidate = useCallback(async () => {
-    if (!claim.trim()) return;
-    console.log("[Validity] Analyze button pressed, claim:", claim.trim());
+  const handleSubmit = useCallback(async () => {
+    if (!situation.trim()) return;
+    console.log("[Emergency] Get Triage button pressed, situation:", situation.trim());
     setError(null);
     setLoading(true);
     try {
-      console.log("[Validity] POST /api/validate-claim →", BASE_URL);
-      const response = await fetch(`${BASE_URL}/api/validate-claim`, {
+      console.log("[Emergency] POST /api/emergency-check →", BASE_URL);
+      const response = await fetch(`${BASE_URL}/api/emergency-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim: claim.trim() }),
+        body: JSON.stringify({ situation: situation.trim() }),
       });
       if (!response.ok) {
         const text = await response.text();
-        console.error("[Validity] API error", response.status, text);
+        console.error("[Emergency] API error", response.status, text);
         throw new Error(`Server error ${response.status}`);
       }
       const data = await response.json();
-      console.log("[Validity] API response received, verdict:", data.verdict);
+      console.log("[Emergency] API response received, recommendation:", data.recommendation);
       router.push({
-        pathname: "/results",
-        params: { claim: claim.trim(), data: JSON.stringify(data) },
+        pathname: "/emergency-results",
+        params: { situation: situation.trim(), data: JSON.stringify(data) },
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      console.error("[Validity] Fetch failed:", message);
-      setError("Couldn't validate your claim. Check your connection and try again.");
+      console.error("[Emergency] Fetch failed:", message);
+      setError("Couldn't get triage guidance. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
-  }, [claim]);
+  }, [situation]);
 
   const handleChipPress = useCallback((text: string) => {
-    console.log("[Validity] Example chip tapped:", text);
-    setClaim(text);
+    console.log("[Emergency] Example chip tapped:", text);
+    setSituation(text);
     setPressedChip(text);
     setTimeout(() => setPressedChip(null), 600);
   }, []);
 
   const loadingMessage = LOADING_MESSAGES[loadingMsgIndex];
-  const isDisabled = !claim.trim() || loading;
+  const isDisabled = !situation.trim() || loading;
 
   const btnBg = isDisabled && !loading ? "#d4cfc9" : C.NAVY;
   const btnTextColor = isDisabled && !loading ? "#a09890" : "#ffffff";
-
   const inputBorderColor = isFocused ? C.NAVY : C.BORDER;
 
   return (
@@ -209,7 +208,7 @@ export default function HomeScreen() {
                 textAlign: "center",
               }}
             >
-              EVIDENCE-BASED RESEARCH VALIDATION
+              MEDICAL TRIAGE ASSISTANT
             </Text>
 
             <View style={{ height: 16 }} />
@@ -223,7 +222,7 @@ export default function HomeScreen() {
                 textAlign: "center",
               }}
             >
-              Hypothesis
+              Emergency
             </Text>
             <Text
               style={{
@@ -235,7 +234,7 @@ export default function HomeScreen() {
                 textAlign: "center",
               }}
             >
-              Analyzer
+              Check
             </Text>
 
             <View style={{ height: 20 }} />
@@ -261,7 +260,7 @@ export default function HomeScreen() {
                 maxWidth: 300,
               }}
             >
-              Submit any claim and receive analysis backed by peer-reviewed academic studies
+              Describe your situation and receive immediate triage guidance — ER, clinic, or home treatment
             </Text>
           </Animated.View>
 
@@ -314,7 +313,7 @@ export default function HomeScreen() {
                     textAlign: "center",
                   }}
                 >
-                  pubmed-validator.ai
+                  emergency-triage.ai
                 </Text>
                 <View style={{ width: 42 }} />
               </View>
@@ -331,7 +330,7 @@ export default function HomeScreen() {
                     marginBottom: 10,
                   }}
                 >
-                  YOUR HYPOTHESIS OR CLAIM
+                  DESCRIBE YOUR SITUATION
                 </Text>
                 <TextInput
                   style={{
@@ -345,16 +344,16 @@ export default function HomeScreen() {
                     paddingBottom: 8,
                     paddingTop: 0,
                   }}
-                  placeholder="e.g. Creatine supplementation improves athletic performance..."
+                  placeholder="e.g. I fell down two flights of stairs and my leg hurts 8/10..."
                   placeholderTextColor={C.TEXT_HINT}
-                  value={claim}
-                  onChangeText={setClaim}
+                  value={situation}
+                  onChangeText={setSituation}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                   editable={!loading}
                   onFocus={() => {
-                    console.log("[Validity] TextInput focused");
+                    console.log("[Emergency] TextInput focused");
                     setIsFocused(true);
                   }}
                   onBlur={() => setIsFocused(false)}
@@ -379,13 +378,13 @@ export default function HomeScreen() {
                     color: C.TEXT_HINT,
                   }}
                 >
-                  Tap to analyze · ~15 seconds
+                  Tap to assess · ~10 seconds
                 </Text>
 
                 <Pressable
                   onPress={() => {
-                    console.log("[Validity] Analyze Claim button pressed");
-                    handleValidate();
+                    console.log("[Emergency] Get Triage button pressed");
+                    handleSubmit();
                   }}
                   disabled={isDisabled}
                   style={{
@@ -425,7 +424,7 @@ export default function HomeScreen() {
                         color: btnTextColor,
                       }}
                     >
-                      Analyze Claim →
+                      Get Triage →
                     </Text>
                   )}
                 </Pressable>
@@ -446,7 +445,7 @@ export default function HomeScreen() {
               transform: [{ translateY: chipsSlide }],
             }}
           >
-            {EXAMPLE_CLAIMS.map((ex) => {
+            {EXAMPLE_CHIPS.map((ex) => {
               const isPressed = pressedChip === ex;
               return (
                 <Pressable
@@ -521,7 +520,7 @@ export default function HomeScreen() {
                   textAlign: "center",
                 }}
               >
-                Live PubMed Data
+                Evidence-Based Triage
               </Text>
               <Text
                 style={{
@@ -541,7 +540,7 @@ export default function HomeScreen() {
                   textAlign: "center",
                 }}
               >
-                36M+ Academic Citations
+                Emergency Medicine Guidelines
               </Text>
               <Text
                 style={{
@@ -561,7 +560,7 @@ export default function HomeScreen() {
                   textAlign: "center",
                 }}
               >
-                Peer-Reviewed Sources
+                Not a substitute for 911
               </Text>
             </View>
           </Animated.View>
