@@ -302,6 +302,9 @@ export default function MythsScreen() {
   const [filter, setFilter] = useState<FilterType>("ALL");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshed, setRefreshed] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const heroAnim = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(20)).current;
@@ -367,6 +370,26 @@ export default function MythsScreen() {
   const handleFilterPress = useCallback((f: FilterType) => {
     console.log("[Myths] Filter pill pressed:", f);
     setFilter(f);
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    console.log("[Myths] Refresh button pressed");
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const res = await fetch(`${BASE_URL}/api/nutrition-myths/refresh`, { method: "POST" });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      const updated = data.myths || data;
+      console.log("[Myths] Refreshed, now", updated.length, "myths");
+      setMyths(updated);
+      setRefreshed(true);
+    } catch (e) {
+      console.error("[Myths] Refresh error:", e);
+      setRefreshError("Couldn't refresh myths. Try again.");
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   const handleToggleExpand = useCallback((id: string) => {
@@ -527,6 +550,64 @@ export default function MythsScreen() {
               );
             })}
           </ScrollView>
+        </Animated.View>
+
+        {/* Refresh button */}
+        <Animated.View
+          style={{
+            opacity: pillsAnim,
+            transform: [{ translateY: pillsSlide }],
+          }}
+        >
+          <View style={{ paddingHorizontal: 20, alignItems: "flex-end", marginBottom: 8 }}>
+            <Pressable
+              onPress={handleRefresh}
+              disabled={refreshing || loading}
+              style={{
+                backgroundColor: refreshed ? "rgba(201,168,108,0.12)" : C.CARD,
+                borderWidth: 1,
+                borderColor: refreshed ? C.GOLD : C.BORDER,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                opacity: refreshing || loading ? 0.5 : 1,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  fontSize: 13,
+                  color: refreshed ? C.GOLD : C.TEXT_MUTED,
+                }}
+              >
+                {refreshing ? "Searching..." : refreshed ? "✓ Refreshed" : "Refresh myths ↻"}
+              </Text>
+            </Pressable>
+          </View>
+          {refreshError && (
+            <View
+              style={{
+                backgroundColor: "rgba(139,58,58,0.07)",
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: "rgba(139,58,58,0.2)",
+                marginHorizontal: 20,
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_400Regular",
+                  fontSize: 14,
+                  color: C.DANGER,
+                  lineHeight: 20,
+                }}
+              >
+                {refreshError}
+              </Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* Loading */}
