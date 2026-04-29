@@ -164,7 +164,7 @@ export default function EmergencyResultsScreen() {
       {/* Hamburger button */}
       <SafeAreaView
         edges={["top", "left"]}
-        style={{ position: "absolute", top: 0, left: 0, zIndex: 100, paddingTop: 12, paddingLeft: 16 }}
+        style={{ position: "absolute", top: 0, left: 0, zIndex: 100, paddingTop: 20, paddingLeft: 20 }}
         pointerEvents="box-none"
       >
         <HamburgerButton onPress={() => setDrawerOpen(true)} />
