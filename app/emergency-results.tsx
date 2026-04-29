@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppDrawer, HamburgerButton } from "@/components/AppDrawer";
+import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
 
 const C = {
   BG: "#faf9f7",
@@ -103,6 +103,8 @@ export default function EmergencyResultsScreen() {
   const showWaitingNote =
     recommendation === "GO_TO_ER" || recommendation === "GO_TO_CLINIC";
 
+  const swipeHandlers = useSwipeToOpenDrawer(() => setDrawerOpen(true));
+
   const handleNewCheck = () => {
     console.log("[EmergencyResults] New Check button pressed");
     router.push("/emergency");
@@ -160,16 +162,8 @@ export default function EmergencyResultsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["bottom"]}>
-      {/* Hamburger button */}
-      <SafeAreaView
-        edges={["top", "left"]}
-        style={{ position: "absolute", top: 0, left: 0, zIndex: 100, paddingTop: 20, paddingLeft: 20 }}
-        pointerEvents="box-none"
-      >
-        <HamburgerButton onPress={() => setDrawerOpen(true)} />
-      </SafeAreaView>
-
+    <View {...swipeHandlers} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["bottom"]}>
       <AppDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <Animated.ScrollView
@@ -180,6 +174,11 @@ export default function EmergencyResultsScreen() {
       >
         {/* Top gold accent */}
         <View style={{ height: 3, backgroundColor: C.GOLD }} />
+
+        {/* Hamburger row */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>
+          <HamburgerButton onPress={() => setDrawerOpen(true)} />
+        </View>
 
         <Animated.View
           style={{
@@ -512,6 +511,7 @@ export default function EmergencyResultsScreen() {
           </View>
         </Animated.View>
       </Animated.ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }

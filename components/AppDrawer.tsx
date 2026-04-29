@@ -7,6 +7,7 @@ import {
   Modal,
   Dimensions,
   TouchableWithoutFeedback,
+  PanResponder,
 } from "react-native";
 import { router, usePathname } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -266,6 +267,28 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
   );
 }
 
+export function useSwipeToOpenDrawer(onOpen: () => void) {
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return (
+          gestureState.moveX < 80 &&
+          gestureState.dx > 20 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
+        );
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 50) {
+          console.log("[AppDrawer] Swipe-right gesture detected, opening drawer");
+          onOpen();
+        }
+      },
+    })
+  ).current;
+
+  return panResponder.panHandlers;
+}
+
 interface HamburgerButtonProps {
   onPress: () => void;
 }
@@ -295,10 +318,6 @@ export function HamburgerButton({ onPress }: HamburgerButtonProps) {
     <Animated.View
       style={{
         transform: [{ scale }],
-        position: "absolute",
-        top: 0,
-        left: 0,
-        zIndex: 100,
       }}
     >
       <Pressable

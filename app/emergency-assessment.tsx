@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
 
 const C = {
   BG: "#faf9f7",
@@ -226,6 +227,8 @@ export default function EmergencyAssessmentScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [situationExpanded, setSituationExpanded] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const swipeHandlers = useSwipeToOpenDrawer(() => setDrawerOpen(true));
 
   // Card slide/fade animation
   const cardOpacity = useRef(new Animated.Value(0)).current;
@@ -428,7 +431,8 @@ export default function EmergencyAssessmentScreen() {
   const nextBtnTextColor = !canProceed || loading ? "#a09890" : "#ffffff";
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
+    <SafeAreaView {...swipeHandlers} style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
+      <AppDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -442,6 +446,11 @@ export default function EmergencyAssessmentScreen() {
         >
           {/* Top gold accent bar */}
           <View style={{ height: 3, backgroundColor: C.GOLD }} />
+
+          {/* Hamburger row */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>
+            <HamburgerButton onPress={() => setDrawerOpen(true)} />
+          </View>
 
           {/* Header section */}
           <Animated.View

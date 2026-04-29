@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppDrawer, HamburgerButton } from "@/components/AppDrawer";
+import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
 
 const C = {
   BG: "#faf9f7",
@@ -153,6 +153,8 @@ export default function HomeScreen() {
     setTimeout(() => setPressedChip(null), 600);
   }, []);
 
+  const swipeHandlers = useSwipeToOpenDrawer(() => setDrawerOpen(true));
+
   const loadingMessage = LOADING_MESSAGES[loadingMsgIndex];
   const isDisabled = !claim.trim() || loading;
 
@@ -162,16 +164,7 @@ export default function HomeScreen() {
   const inputBorderColor = isFocused ? C.NAVY : C.BORDER;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
-      {/* Hamburger button — absolute over content */}
-      <SafeAreaView
-        edges={["top", "left"]}
-        style={{ position: "absolute", top: 0, left: 0, zIndex: 100, paddingTop: 20, paddingLeft: 20 }}
-        pointerEvents="box-none"
-      >
-        <HamburgerButton onPress={() => setDrawerOpen(true)} />
-      </SafeAreaView>
-
+    <SafeAreaView {...swipeHandlers} style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
       <AppDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <KeyboardAvoidingView
@@ -187,6 +180,11 @@ export default function HomeScreen() {
         >
           {/* Top accent bar */}
           <View style={{ height: 3, backgroundColor: C.GOLD }} />
+
+          {/* Hamburger row */}
+          <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>
+            <HamburgerButton onPress={() => setDrawerOpen(true)} />
+          </View>
 
           {/* Hero header */}
           <Animated.View
