@@ -66,10 +66,11 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
     }
   }, [visible, translateX, overlayOpacity]);
 
-  const isIndex = pathname === "/" || pathname === "/index" || pathname === "";
+  const isHome = pathname === "/home";
+  const isAnalyzer = pathname === "/" || pathname === "/index" || pathname === "";
   const isEmergency = pathname === "/emergency";
 
-  const handleNavigate = (route: "/" | "/emergency") => {
+  const handleNavigate = (route: "/home" | "/" | "/emergency") => {
     console.log("[AppDrawer] Menu item tapped, navigating to:", route);
     onClose();
     setTimeout(() => {
@@ -158,7 +159,69 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
               }}
             />
 
-            {/* Section label */}
+            {/* Section label: Navigation */}
+            <Text
+              style={{
+                fontFamily: "SourceSans3_600SemiBold",
+                fontSize: 10,
+                color: C.GOLD,
+                letterSpacing: 2.5,
+                textTransform: "uppercase",
+                paddingHorizontal: 24,
+                marginBottom: 8,
+              }}
+            >
+              NAVIGATION
+            </Text>
+
+            {/* Home */}
+            <Pressable
+              onPress={() => handleNavigate("/home")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                marginHorizontal: 8,
+                borderRadius: 12,
+                borderLeftWidth: isHome ? 3 : 0,
+                borderLeftColor: C.GOLD,
+                backgroundColor: isHome
+                  ? C.DRAWER_ITEM_ACTIVE_BG
+                  : pressed
+                  ? C.DRAWER_ITEM_HOVER
+                  : "transparent",
+              })}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>🏠</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 15,
+                    color: C.WHITE,
+                    marginBottom: 2,
+                  }}
+                >
+                  Home
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.MUTED_BLUE,
+                    lineHeight: 17,
+                  }}
+                >
+                  Back to the main page
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Spacer before TOOLS */}
+            <View style={{ height: 16 }} />
+
+            {/* Section label: Tools */}
             <Text
               style={{
                 fontFamily: "SourceSans3_600SemiBold",
@@ -183,9 +246,9 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
                 paddingVertical: 14,
                 marginHorizontal: 8,
                 borderRadius: 12,
-                borderLeftWidth: isIndex ? 3 : 0,
+                borderLeftWidth: isAnalyzer ? 3 : 0,
                 borderLeftColor: C.GOLD,
-                backgroundColor: isIndex
+                backgroundColor: isAnalyzer
                   ? C.DRAWER_ITEM_ACTIVE_BG
                   : pressed
                   ? C.DRAWER_ITEM_HOVER
