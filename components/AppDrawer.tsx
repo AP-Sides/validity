@@ -72,8 +72,9 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
   const isInteractions = pathname === "/interactions";
   const isMyths = pathname === "/myths";
   const isFacts = pathname === "/facts";
+  const isSaved = pathname === "/saved";
 
-  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency" | "/interactions" | "/myths" | "/facts") => {
+  const handleNavigate = (route: "/home" | "/analyzer" | "/emergency" | "/interactions" | "/myths" | "/facts" | "/saved") => {
     console.log("[AppDrawer] Menu item tapped, navigating to:", route);
     onClose();
     setTimeout(() => {
@@ -217,6 +218,50 @@ export function AppDrawer({ visible, onClose }: AppDrawerProps) {
                   }}
                 >
                   Back to the main page
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Saved */}
+            <Pressable
+              onPress={() => handleNavigate("/saved")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                marginHorizontal: 8,
+                borderRadius: 12,
+                borderLeftWidth: isSaved ? 3 : 0,
+                borderLeftColor: C.GOLD,
+                backgroundColor: isSaved
+                  ? C.DRAWER_ITEM_ACTIVE_BG
+                  : pressed
+                  ? C.DRAWER_ITEM_HOVER
+                  : "transparent",
+              })}
+            >
+              <Text style={{ fontSize: 22, marginRight: 14 }}>★</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    fontSize: 15,
+                    color: C.WHITE,
+                    marginBottom: 2,
+                  }}
+                >
+                  Saved
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    fontSize: 12,
+                    color: C.MUTED_BLUE,
+                    lineHeight: 17,
+                  }}
+                >
+                  Your bookmarked facts and myths
                 </Text>
               </View>
             </Pressable>

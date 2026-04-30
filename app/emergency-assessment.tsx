@@ -418,7 +418,7 @@ export default function EmergencyAssessmentScreen() {
   if (!situation) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["top", "bottom"]}>
-        <View style={{ height: 3, backgroundColor: C.GOLD }} />
+        <View style={{ height: 3, backgroundColor: C.DANGER }} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
           <Text
             style={{
@@ -501,8 +501,8 @@ export default function EmergencyAssessmentScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Top gold accent bar */}
-          <View style={{ height: 3, backgroundColor: C.GOLD }} />
+          {/* Top accent bar */}
+          <View style={{ height: 3, backgroundColor: C.DANGER }} />
 
           {/* Hamburger row */}
           <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>

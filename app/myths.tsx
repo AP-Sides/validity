@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
+import { useBookmarks } from "@/utils/useBookmarks";
 
 const C = {
   BG: "#faf9f7",
@@ -152,10 +153,14 @@ function MythCard({
   myth,
   expanded,
   onToggleExpand,
+  isBookmarked,
+  onToggleBookmark,
 }: {
   myth: Myth;
   expanded: boolean;
   onToggleExpand: () => void;
+  isBookmarked: boolean;
+  onToggleBookmark: () => void;
 }) {
   const studiesOpacity = useRef(new Animated.Value(0)).current;
 
@@ -176,6 +181,16 @@ function MythCard({
 
   const studiesLabel = expanded ? "Hide studies ↑" : "See studies →";
 
+  const leftBorderColor =
+    myth.verdict === "BUSTED"
+      ? "#8b3a3a"
+      : myth.verdict === "CONFIRMED"
+      ? "#2d5a27"
+      : "#c9a86c";
+
+  const bookmarkChar = isBookmarked ? "★" : "☆";
+  const bookmarkColor = isBookmarked ? C.GOLD : C.TEXT_HINT;
+
   return (
     <View
       style={{
@@ -183,8 +198,14 @@ function MythCard({
         marginBottom: 16,
         backgroundColor: C.CARD,
         borderRadius: 20,
-        borderWidth: 1,
-        borderColor: C.BORDER,
+        borderTopWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 3,
+        borderTopColor: C.BORDER,
+        borderRightColor: C.BORDER,
+        borderBottomColor: C.BORDER,
+        borderLeftColor: leftBorderColor,
         shadowColor: C.NAVY,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
@@ -226,17 +247,30 @@ function MythCard({
 
       {/* Card body */}
       <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
-        <Text
-          style={{
-            fontFamily: "PlayfairDisplay_700Bold",
-            fontSize: 18,
-            color: C.NAVY,
-            lineHeight: 24,
-            marginBottom: 8,
-          }}
-        >
-          {myth.claim}
-        </Text>
+        {/* Claim + bookmark row */}
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+          <Text
+            style={{
+              fontFamily: "PlayfairDisplay_700Bold",
+              fontSize: 18,
+              color: C.NAVY,
+              lineHeight: 24,
+              flex: 1,
+              marginRight: 8,
+            }}
+          >
+            {myth.claim}
+          </Text>
+          <Pressable
+            onPress={() => {
+              console.log("[Myths] Bookmark pressed for myth:", myth.id, "currently saved:", isBookmarked);
+              onToggleBookmark();
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={{ fontSize: 20, color: bookmarkColor }}>{bookmarkChar}</Text>
+          </Pressable>
+        </View>
         <Text
           style={{
             fontFamily: "SourceSans3_400Regular",
@@ -305,6 +339,8 @@ export default function MythsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshed, setRefreshed] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  const { toggle, isBookmarked } = useBookmarks();
 
   const heroAnim = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(20)).current;
@@ -659,6 +695,18 @@ export default function MythsScreen() {
                 myth={myth}
                 expanded={expandedIds.has(myth.id)}
                 onToggleExpand={() => handleToggleExpand(myth.id)}
+                isBookmarked={isBookmarked(myth.id)}
+                onToggleBookmark={() =>
+                  toggle({
+                    id: myth.id,
+                    type: "myth",
+                    savedAt: new Date().toISOString(),
+                    claim: myth.claim,
+                    verdict: myth.verdict,
+                    one_liner: myth.one_liner,
+                    explanation: myth.explanation,
+                  })
+                }
               />
             ))}
           </Animated.View>

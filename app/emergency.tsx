@@ -127,11 +127,38 @@ export default function EmergencyScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Top accent bar */}
-          <View style={{ height: 3, backgroundColor: C.GOLD }} />
+          <View style={{ height: 3, backgroundColor: C.DANGER }} />
 
           {/* Hamburger row */}
           <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>
             <HamburgerButton onPress={() => setDrawerOpen(true)} />
+          </View>
+
+          {/* 911 disclaimer banner */}
+          <View style={{
+            marginHorizontal: 20,
+            marginTop: 12,
+            marginBottom: 4,
+            backgroundColor: "rgba(139,58,58,0.08)",
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: "rgba(139,58,58,0.25)",
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}>
+            <Text style={{ fontSize: 16 }}>🚨</Text>
+            <Text style={{
+              fontFamily: "SourceSans3_600SemiBold",
+              fontSize: 13,
+              color: "#8b3a3a",
+              flex: 1,
+              lineHeight: 18,
+            }}>
+              If this is a life-threatening emergency, call 911 immediately. This tool does not replace emergency services.
+            </Text>
           </View>
 
           {/* Hero header */}

@@ -10,7 +10,9 @@ import {
   Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
+import { useBookmarks } from "@/utils/useBookmarks";
 
 const C = {
   BG: "#faf9f7",
@@ -85,7 +87,15 @@ function TagBadge({ tag }: { tag: Fact["tag"] }) {
   );
 }
 
-function FactCard({ fact }: { fact: Fact }) {
+function FactCard({
+  fact,
+  isBookmarked,
+  onToggleBookmark,
+}: {
+  fact: Fact;
+  isBookmarked: boolean;
+  onToggleBookmark: () => void;
+}) {
   const browserLabel =
     fact.tag === "Overturned"
       ? "Overturns Conventional Wisdom"
@@ -95,6 +105,16 @@ function FactCard({ fact }: { fact: Fact }) {
 
   const journalYear = `${fact.journal} · ${fact.year}`;
   const hasUrl = Boolean(fact.url);
+
+  const leftBorderColor =
+    fact.tag === "Overturned"
+      ? "#8b3a3a"
+      : fact.tag === "Surprising"
+      ? "#c9a86c"
+      : "#2d5a27";
+
+  const bookmarkChar = isBookmarked ? "★" : "☆";
+  const bookmarkColor = isBookmarked ? C.GOLD : C.TEXT_HINT;
 
   const handleReadPaper = useCallback(() => {
     if (fact.url) {
@@ -110,8 +130,14 @@ function FactCard({ fact }: { fact: Fact }) {
         marginBottom: 16,
         backgroundColor: C.CARD,
         borderRadius: 20,
-        borderWidth: 1,
-        borderColor: C.BORDER,
+        borderTopWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderLeftWidth: 3,
+        borderTopColor: C.BORDER,
+        borderRightColor: C.BORDER,
+        borderBottomColor: C.BORDER,
+        borderLeftColor: leftBorderColor,
         shadowColor: C.NAVY,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
@@ -153,7 +179,19 @@ function FactCard({ fact }: { fact: Fact }) {
 
       {/* Card body */}
       <View style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 16 }}>
-        <TagBadge tag={fact.tag} />
+        {/* Tag + bookmark row */}
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <TagBadge tag={fact.tag} />
+          <Pressable
+            onPress={() => {
+              console.log("[Facts] Bookmark pressed for fact:", fact.id, "currently saved:", isBookmarked);
+              onToggleBookmark();
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={{ fontSize: 20, color: bookmarkColor }}>{bookmarkChar}</Text>
+          </Pressable>
+        </View>
         <Text
           style={{
             fontFamily: "PlayfairDisplay_700Bold",
@@ -218,9 +256,11 @@ export default function FactsScreen() {
   const [facts, setFacts] = useState<Fact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [seenCount, setSeenCount] = useState(0);
+  const [batchNumber, setBatchNumber] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const seenIdsByCategory = useRef<Record<string, string[]>>({});
+
+  const { toggle, isBookmarked } = useBookmarks();
 
   const heroAnim = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(20)).current;
@@ -260,6 +300,32 @@ export default function FactsScreen() {
     animateSection(footerAnim, footerSlide, 400);
   }, [animateSection, heroAnim, heroSlide, pillsAnim, pillsSlide, cardsAnim, cardsSlide, footerAnim, footerSlide]);
 
+  const persistSeenIds = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem("validity_seen_facts", JSON.stringify(seenIdsByCategory.current));
+    } catch (e) {
+      console.warn("[Facts] Failed to persist seen IDs:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem("validity_seen_facts");
+        if (stored) {
+          const parsed: Record<string, string[]> = JSON.parse(stored);
+          Object.keys(parsed).forEach((cat) => {
+            seenIdsByCategory.current[cat] = parsed[cat];
+          });
+          console.log("[Facts] Loaded persisted seen IDs from AsyncStorage");
+        }
+      } catch (e) {
+        console.warn("[Facts] Failed to load persisted seen IDs:", e);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchFacts = useCallback(async (category: string, isNewBatch: boolean) => {
     console.log("[Facts] Fetching facts for category:", category, "isNewBatch:", isNewBatch);
     setLoading(true);
@@ -282,14 +348,17 @@ export default function FactsScreen() {
       const newIds = newFacts.map((f: Fact) => f.id);
       seenIdsByCategory.current[category] = [...seenIds, ...newIds];
       setFacts(newFacts);
-      setSeenCount(seenIdsByCategory.current[category].length);
+      if (isNewBatch) {
+        setBatchNumber((prev) => prev + 1);
+      }
+      await persistSeenIds();
     } catch (e) {
       console.error("[Facts] Error loading facts:", e);
       setError("Couldn't load facts. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [persistSeenIds]);
 
   useEffect(() => {
     fetchFacts("medical", false);
@@ -301,6 +370,7 @@ export default function FactsScreen() {
       console.log("[Facts] Category pill pressed:", key);
       setActiveCategory(key);
       setFacts([]);
+      setBatchNumber(1);
       fetchFacts(key, false);
     },
     [activeCategory, fetchFacts]
@@ -313,7 +383,8 @@ export default function FactsScreen() {
 
   const swipeHandlers = useSwipeToOpenDrawer(() => setDrawerOpen(true));
 
-  const factsCountText = `${facts.length} facts · ${seenCount} seen`;
+  const excludedCount = (seenIdsByCategory.current[activeCategory] ?? []).length;
+  const factsCountText = `Batch ${batchNumber} · ${excludedCount} excluded`;
 
   return (
     <SafeAreaView
@@ -564,7 +635,24 @@ export default function FactsScreen() {
             }}
           >
             {facts.map((fact) => (
-              <FactCard key={fact.id} fact={fact} />
+              <FactCard
+                key={fact.id}
+                fact={fact}
+                isBookmarked={isBookmarked(fact.id)}
+                onToggleBookmark={() =>
+                  toggle({
+                    id: fact.id,
+                    type: "fact",
+                    savedAt: new Date().toISOString(),
+                    headline: fact.headline,
+                    body: fact.body,
+                    tag: fact.tag,
+                    journal: fact.journal,
+                    year: fact.year,
+                    url: fact.url,
+                  })
+                }
+              />
             ))}
           </Animated.View>
         )}

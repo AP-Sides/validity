@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Linking,
+  Share,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -175,6 +176,19 @@ export default function InteractionResultsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleShare = useCallback(async () => {
+    if (!data) return;
+    console.log("[InteractionResults] Share button pressed, substances:", substances);
+    const substanceList = substances.join(" + ");
+    const message = `Validity — Interaction Check\n\nSubstances: ${substanceList}\n\nSeverity: ${data.severity}\n\n${data.summary}\n\nPowered by Validity`;
+    try {
+      await Share.share({ message });
+    } catch (e) {
+      console.warn("[InteractionResults] Share failed:", e);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.substances, params.data]);
+
   if (parseError || !data) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.BG }} edges={["bottom"]}>
@@ -257,23 +271,49 @@ export default function InteractionResultsScreen() {
           }}
         >
           {/* Back row */}
-          <Pressable
-            onPress={() => {
-              console.log("[InteractionResults] Back button pressed");
-              router.back();
-            }}
-            style={{ flexDirection: "row", alignItems: "center" }}
-          >
-            <Text
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Pressable
+              onPress={() => {
+                console.log("[InteractionResults] Back button pressed");
+                router.back();
+              }}
+              style={{ flexDirection: "row", alignItems: "center" }}
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  fontSize: 14,
+                  color: C.NAVY,
+                }}
+              >
+                ← {substancesLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleShare}
               style={{
-                fontFamily: "SourceSans3_600SemiBold",
-                fontSize: 14,
-                color: C.NAVY,
+                backgroundColor: "rgba(201,168,108,0.12)",
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderWidth: 1,
+                borderColor: "rgba(201,168,108,0.4)",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
               }}
             >
-              ← {substancesLabel}
-            </Text>
-          </Pressable>
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  fontSize: 13,
+                  color: C.GOLD,
+                }}
+              >
+                Share ↗
+              </Text>
+            </Pressable>
+          </View>
 
           {/* Severity banner */}
           <View

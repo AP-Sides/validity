@@ -8,6 +8,7 @@ import {
   Pressable,
   Linking,
   ActivityIndicator,
+  Share,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -488,6 +489,18 @@ export default function ResultsScreen() {
     }
   }, [deeperLoading, deeperExhausted, deeperRound, studies, claim]);
 
+  const handleShare = useCallback(async () => {
+    console.log("[Results] Share button pressed, verdict:", verdict);
+    const verdictLine = verdict === "VALID" ? "✓ Valid" : verdict === "INVALID" ? "✗ Invalid" : "~ Inconclusive";
+    const totalCount = studies.length;
+    const message = `Validity — Hypothesis Analysis\n\nClaim: ${claim}\n\nVerdict: ${verdictLine} (${confidence}% confidence)\n\n${summary}\n\nAnalyzed using ${totalCount} peer-reviewed studies.\n\nPowered by Validity`;
+    try {
+      await Share.share({ message });
+    } catch (e) {
+      console.warn("[Results] Share failed:", e);
+    }
+  }, [verdict, confidence, summary, studies.length, claim]);
+
   const summaryParts = splitSummaryAtMidpoint(summary);
   const consensusText = summaryParts.first;
   const caveatsText = summaryParts.second;
@@ -511,6 +524,18 @@ export default function ResultsScreen() {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
+      {/* Header row with Share button */}
+      <Animated.View
+        style={[
+          styles.headerRow,
+          { opacity: headerOpacity, transform: [{ translateY: headerSlide }] },
+        ]}
+      >
+        <Pressable onPress={handleShare} style={styles.shareBtn}>
+          <Text style={styles.shareBtnText}>Share ↗</Text>
+        </Pressable>
+      </Animated.View>
+
       {/* Verdict Banner */}
       <Animated.View
         style={[
@@ -655,6 +680,28 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 60,
     gap: 16,
+  },
+
+  // Header row
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  shareBtn: {
+    backgroundColor: "rgba(201,168,108,0.12)",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "rgba(201,168,108,0.4)",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shareBtnText: {
+    fontFamily: "SourceSans3_600SemiBold",
+    fontSize: 13,
+    color: "#c9a86c",
   },
 
   // Verdict Banner

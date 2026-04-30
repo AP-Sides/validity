@@ -26,6 +26,114 @@ const C = {
   DANGER: "#8b3a3a",
 };
 
+// Compact grid card for the 2-column layout
+function GridCard({
+  label,
+  title,
+  description,
+  accentColor,
+  onPress,
+}: {
+  label: string;
+  title: string;
+  description: string;
+  accentColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <View
+      style={{
+        width: "47%",
+        backgroundColor: C.CARD,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: C.BORDER,
+        shadowColor: C.NAVY,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 3,
+        overflow: "hidden",
+        minHeight: 140,
+      }}
+    >
+      {/* Browser bar */}
+      <View
+        style={{
+          backgroundColor: C.CARD_TOP,
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          paddingHorizontal: 10,
+          paddingVertical: 7,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#e8a090" }} />
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#e8c870" }} />
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#90c870" }} />
+        </View>
+        <Text
+          style={{
+            fontFamily: "SourceSans3_400Regular",
+            fontSize: 10,
+            color: C.TEXT_HINT,
+            flex: 1,
+            textAlign: "center",
+          }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <View style={{ width: 25 }} />
+      </View>
+
+      {/* Card body */}
+      <View style={{ flex: 1, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 }}>
+        <Text
+          style={{
+            fontFamily: "PlayfairDisplay_700Bold",
+            fontSize: 15,
+            color: C.NAVY,
+            marginBottom: 4,
+            lineHeight: 20,
+          }}
+          numberOfLines={2}
+        >
+          {title}
+        </Text>
+        <Text
+          style={{
+            fontFamily: "SourceSans3_400Regular",
+            fontSize: 12,
+            color: C.TEXT_MUTED,
+            lineHeight: 17,
+            flex: 1,
+          }}
+          numberOfLines={3}
+        >
+          {description}
+        </Text>
+        <Pressable
+          onPress={onPress}
+          style={{ marginTop: 8, alignSelf: "flex-start" }}
+        >
+          <Text
+            style={{
+              fontFamily: "SourceSans3_600SemiBold",
+              fontSize: 12,
+              color: accentColor,
+            }}
+          >
+            Open →
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [starRating, setStarRating] = useState(0);
@@ -34,19 +142,13 @@ export default function HomeScreen() {
   const [thankYouVisible, setThankYouVisible] = useState(false);
   const thankYouOpacity = useRef(new Animated.Value(0)).current;
 
-  // Staggered mount animations
+  // Staggered mount animations — compressed to ~490ms
   const heroAnim = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(20)).current;
-  const analyzerAnim = useRef(new Animated.Value(0)).current;
-  const analyzerSlide = useRef(new Animated.Value(20)).current;
   const emergencyAnim = useRef(new Animated.Value(0)).current;
   const emergencySlide = useRef(new Animated.Value(20)).current;
-  const interactionAnim = useRef(new Animated.Value(0)).current;
-  const interactionSlide = useRef(new Animated.Value(20)).current;
-  const mythsAnim = useRef(new Animated.Value(0)).current;
-  const mythsSlide = useRef(new Animated.Value(20)).current;
-  const factsAnim = useRef(new Animated.Value(0)).current;
-  const factsSlide = useRef(new Animated.Value(20)).current;
+  const gridAnim = useRef(new Animated.Value(0)).current;
+  const gridSlide = useRef(new Animated.Value(20)).current;
   const reviewAnim = useRef(new Animated.Value(0)).current;
   const reviewSlide = useRef(new Animated.Value(20)).current;
   const footerAnim = useRef(new Animated.Value(0)).current;
@@ -76,21 +178,15 @@ export default function HomeScreen() {
 
   useEffect(() => {
     animateSection(heroAnim, heroSlide, 0);
-    animateSection(analyzerAnim, analyzerSlide, 150);
-    animateSection(emergencyAnim, emergencySlide, 280);
-    animateSection(interactionAnim, interactionSlide, 400);
-    animateSection(mythsAnim, mythsSlide, 520);
-    animateSection(factsAnim, factsSlide, 640);
-    animateSection(reviewAnim, reviewSlide, 760);
-    animateSection(footerAnim, footerSlide, 880);
+    animateSection(emergencyAnim, emergencySlide, 80);
+    animateSection(gridAnim, gridSlide, 160);
+    animateSection(reviewAnim, reviewSlide, 280);
+    animateSection(footerAnim, footerSlide, 390);
   }, [
     animateSection,
     heroAnim, heroSlide,
-    analyzerAnim, analyzerSlide,
     emergencyAnim, emergencySlide,
-    interactionAnim, interactionSlide,
-    mythsAnim, mythsSlide,
-    factsAnim, factsSlide,
+    gridAnim, gridSlide,
     reviewAnim, reviewSlide,
     footerAnim, footerSlide,
   ]);
@@ -230,146 +326,7 @@ export default function HomeScreen() {
           </Text>
         </Animated.View>
 
-        {/* Hypothesis Analyzer card */}
-        <Animated.View
-          style={{
-            marginHorizontal: 20,
-            marginBottom: 16,
-            opacity: analyzerAnim,
-            transform: [{ translateY: analyzerSlide }],
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: C.CARD,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: C.BORDER,
-              shadowColor: C.NAVY,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 24,
-              elevation: 4,
-              overflow: "hidden",
-            }}
-          >
-            {/* Mock browser bar */}
-            <View
-              style={{
-                backgroundColor: C.CARD_TOP,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
-              </View>
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                Hypothesis Analyzer
-              </Text>
-              <View style={{ width: 42 }} />
-            </View>
-
-            {/* Card body */}
-            <View style={{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
-              <View
-                style={{
-                  width: 3,
-                  backgroundColor: C.NAVY,
-                  borderRadius: 2,
-                  alignSelf: "stretch",
-                }}
-              />
-              <View style={{ flex: 1, paddingLeft: 14 }}>
-                <Text
-                  style={{
-                    fontFamily: "PlayfairDisplay_700Bold",
-                    fontSize: 20,
-                    color: C.NAVY,
-                    marginBottom: 6,
-                  }}
-                >
-                  Hypothesis Analyzer
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_400Regular",
-                    fontSize: 14,
-                    color: C.TEXT_MUTED,
-                    lineHeight: 20,
-                  }}
-                >
-                  Submit any scientific or medical claim and receive a verdict backed by peer-reviewed research from PubMed, arXiv, and more.
-                </Text>
-              </View>
-            </View>
-
-            {/* Card footer */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 18,
-                paddingBottom: 16,
-                paddingTop: 8,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                }}
-              >
-                ~15 seconds · Multi-database
-              </Text>
-              <Pressable
-                onPress={() => {
-                  console.log("[Home] Open Hypothesis Analyzer pressed");
-                  router.push("/analyzer");
-                }}
-                style={{
-                  backgroundColor: C.NAVY,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  shadowColor: C.NAVY,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_600SemiBold",
-                    fontSize: 14,
-                    color: "#ffffff",
-                  }}
-                >
-                  Open Tool →
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Emergency Checker card */}
+        {/* Emergency Checker card — full width */}
         <Animated.View
           style={{
             marginHorizontal: 20,
@@ -508,420 +465,62 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* Interaction Checker card */}
+        {/* 2-column grid of remaining tools */}
         <Animated.View
           style={{
-            marginHorizontal: 20,
+            opacity: gridAnim,
+            transform: [{ translateY: gridSlide }],
+            paddingHorizontal: 20,
             marginBottom: 16,
-            opacity: interactionAnim,
-            transform: [{ translateY: interactionSlide }],
           }}
         >
           <View
             style={{
-              backgroundColor: C.CARD,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: C.BORDER,
-              shadowColor: C.NAVY,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 24,
-              elevation: 4,
-              overflow: "hidden",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 12,
             }}
           >
-            {/* Mock browser bar */}
-            <View
-              style={{
-                backgroundColor: C.CARD_TOP,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                flexDirection: "row",
-                alignItems: "center",
+            <GridCard
+              label="Hypothesis Analyzer"
+              title="Hypothesis Analyzer"
+              description="Submit any scientific claim and receive a verdict backed by peer-reviewed research."
+              accentColor={C.NAVY}
+              onPress={() => {
+                console.log("[Home] Open Hypothesis Analyzer pressed");
+                router.push("/analyzer");
               }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
-              </View>
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                Interaction Checker
-              </Text>
-              <View style={{ width: 42 }} />
-            </View>
-
-            {/* Card body */}
-            <View style={{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
-              <View
-                style={{
-                  width: 3,
-                  backgroundColor: "#2a6b5e",
-                  borderRadius: 2,
-                  alignSelf: "stretch",
-                }}
-              />
-              <View style={{ flex: 1, paddingLeft: 14 }}>
-                <Text
-                  style={{
-                    fontFamily: "PlayfairDisplay_700Bold",
-                    fontSize: 20,
-                    color: "#2a6b5e",
-                    marginBottom: 6,
-                  }}
-                >
-                  Interaction Checker
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_400Regular",
-                    fontSize: 14,
-                    color: C.TEXT_MUTED,
-                    lineHeight: 20,
-                  }}
-                >
-                  Check for dangerous interactions between medications, supplements, and substances.
-                </Text>
-              </View>
-            </View>
-
-            {/* Card footer */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 18,
-                paddingBottom: 16,
-                paddingTop: 8,
+            />
+            <GridCard
+              label="Interaction Checker"
+              title="Interaction Checker"
+              description="Check for dangerous interactions between medications, supplements, and substances."
+              accentColor="#2a6b5e"
+              onPress={() => {
+                console.log("[Home] Open Interaction Checker pressed");
+                router.push("/interactions");
               }}
-            >
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                }}
-              >
-                Pair analysis · PubMed sourced
-              </Text>
-              <Pressable
-                onPress={() => {
-                  console.log("[Home] Open Interaction Checker pressed");
-                  router.push("/interactions");
-                }}
-                style={{
-                  backgroundColor: "#2a6b5e",
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  shadowColor: "#2a6b5e",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_600SemiBold",
-                    fontSize: 14,
-                    color: "#ffffff",
-                  }}
-                >
-                  Open Tool →
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Myth Buster card */}
-        <Animated.View
-          style={{
-            marginHorizontal: 20,
-            marginBottom: 16,
-            opacity: mythsAnim,
-            transform: [{ translateY: mythsSlide }],
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: C.CARD,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: C.BORDER,
-              shadowColor: C.NAVY,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 24,
-              elevation: 4,
-              overflow: "hidden",
-            }}
-          >
-            {/* Mock browser bar */}
-            <View
-              style={{
-                backgroundColor: C.CARD_TOP,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                flexDirection: "row",
-                alignItems: "center",
+            />
+            <GridCard
+              label="Myth Buster"
+              title="Myth Buster"
+              description="Browse popular nutrition claims rated against peer-reviewed evidence."
+              accentColor={C.NAVY}
+              onPress={() => {
+                console.log("[Home] Browse Myth Buster pressed");
+                router.push("/myths");
               }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
-              </View>
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                Myth Buster
-              </Text>
-              <View style={{ width: 42 }} />
-            </View>
-
-            {/* Card body */}
-            <View style={{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
-              <View
-                style={{
-                  width: 3,
-                  backgroundColor: C.NAVY,
-                  borderRadius: 2,
-                  alignSelf: "stretch",
-                }}
-              />
-              <View style={{ flex: 1, paddingLeft: 14 }}>
-                <Text
-                  style={{
-                    fontFamily: "PlayfairDisplay_700Bold",
-                    fontSize: 20,
-                    color: C.NAVY,
-                    marginBottom: 6,
-                  }}
-                >
-                  Myth Buster
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_400Regular",
-                    fontSize: 14,
-                    color: C.TEXT_MUTED,
-                    lineHeight: 20,
-                  }}
-                >
-                  Browse popular nutrition claims rated against peer-reviewed evidence.
-                </Text>
-              </View>
-            </View>
-
-            {/* Card footer */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 18,
-                paddingBottom: 16,
-                paddingTop: 8,
+            />
+            <GridCard
+              label="Did You Know?"
+              title="Did You Know?"
+              description="Surprising recent discoveries from peer-reviewed journals across science and medicine."
+              accentColor={C.NAVY}
+              onPress={() => {
+                console.log("[Home] Explore Facts pressed");
+                router.push("/facts");
               }}
-            >
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                }}
-              >
-                18 myths · Evidence-rated
-              </Text>
-              <Pressable
-                onPress={() => {
-                  console.log("[Home] Browse Myth Buster pressed");
-                  router.push("/myths");
-                }}
-                style={{
-                  backgroundColor: C.NAVY,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  shadowColor: C.NAVY,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_600SemiBold",
-                    fontSize: 14,
-                    color: "#ffffff",
-                  }}
-                >
-                  Browse myths →
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* Did You Know card */}
-        <Animated.View
-          style={{
-            marginHorizontal: 20,
-            marginBottom: 16,
-            opacity: factsAnim,
-            transform: [{ translateY: factsSlide }],
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: C.CARD,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: C.BORDER,
-              shadowColor: C.NAVY,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 24,
-              elevation: 4,
-              overflow: "hidden",
-            }}
-          >
-            {/* Mock browser bar */}
-            <View
-              style={{
-                backgroundColor: C.CARD_TOP,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8a090" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#e8c870" }} />
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#90c870" }} />
-              </View>
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                Did You Know?
-              </Text>
-              <View style={{ width: 42 }} />
-            </View>
-
-            {/* Card body */}
-            <View style={{ flexDirection: "row", paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12 }}>
-              <View
-                style={{
-                  width: 3,
-                  backgroundColor: C.NAVY,
-                  borderRadius: 2,
-                  alignSelf: "stretch",
-                }}
-              />
-              <View style={{ flex: 1, paddingLeft: 14 }}>
-                <Text
-                  style={{
-                    fontFamily: "PlayfairDisplay_700Bold",
-                    fontSize: 20,
-                    color: C.NAVY,
-                    marginBottom: 6,
-                  }}
-                >
-                  Did You Know?
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_400Regular",
-                    fontSize: 14,
-                    color: C.TEXT_MUTED,
-                    lineHeight: 20,
-                  }}
-                >
-                  Surprising recent discoveries from peer-reviewed journals across science, medicine, music and more.
-                </Text>
-              </View>
-            </View>
-
-            {/* Card footer */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 18,
-                paddingBottom: 16,
-                paddingTop: 8,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  fontSize: 12,
-                  color: C.TEXT_HINT,
-                }}
-              >
-                6 categories · Fresh each visit
-              </Text>
-              <Pressable
-                onPress={() => {
-                  console.log("[Home] Explore Facts pressed");
-                  router.push("/facts");
-                }}
-                style={{
-                  backgroundColor: C.NAVY,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  shadowColor: C.NAVY,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: "SourceSans3_600SemiBold",
-                    fontSize: 14,
-                    color: "#ffffff",
-                  }}
-                >
-                  Explore facts →
-                </Text>
-              </Pressable>
-            </View>
+            />
           </View>
         </Animated.View>
 

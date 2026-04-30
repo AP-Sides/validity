@@ -118,6 +118,7 @@ export default function RootLayout() {
                 <Stack.Screen name="interaction-results" options={{ headerShown: false }} />
                 <Stack.Screen name="myths" options={{ headerShown: false }} />
                 <Stack.Screen name="facts" options={{ headerShown: false }} />
+                <Stack.Screen name="saved" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style="dark" />
             </GestureHandlerRootView>

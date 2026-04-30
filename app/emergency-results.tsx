@@ -172,8 +172,8 @@ export default function EmergencyResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="automatic"
       >
-        {/* Top gold accent */}
-        <View style={{ height: 3, backgroundColor: C.GOLD }} />
+        {/* Top accent bar */}
+        <View style={{ height: 3, backgroundColor: "#8b3a3a" }} />
 
         {/* Hamburger row */}
         <View style={{ paddingHorizontal: 20, paddingTop: 16, alignItems: "flex-start" }}>

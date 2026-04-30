@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppDrawer, HamburgerButton, useSwipeToOpenDrawer } from "@/components/AppDrawer";
 
 const C = {
@@ -37,6 +38,7 @@ export default function HypothesisAnalyzerScreen() {
   const [isFocused, setIsFocused] = useState(false);
   const [pressedChip, setPressedChip] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [recentClaims, setRecentClaims] = useState<string[]>([]);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(20)).current;
@@ -81,9 +83,33 @@ export default function HypothesisAnalyzerScreen() {
     return () => { if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current); };
   }, [loading, loadingMsgOpacity]);
 
+  const saveRecentClaims = useCallback(async (claims: string[]) => {
+    try {
+      await AsyncStorage.setItem("validity_recent_claims", JSON.stringify(claims));
+    } catch (e) {
+      console.warn("[Analyzer] Failed to save recent claims:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem("validity_recent_claims");
+        if (stored) {
+          const parsed: string[] = JSON.parse(stored);
+          setRecentClaims(parsed);
+          console.log("[Analyzer] Loaded recent claims from AsyncStorage:", parsed.length);
+        }
+      } catch (e) {
+        console.warn("[Analyzer] Failed to load recent claims:", e);
+      }
+    })();
+  }, []);
+
   const handleValidate = useCallback(async () => {
     if (!claim.trim()) return;
-    console.log("[HypothesisAnalyzer] Analyze Claim button pressed, claim:", claim.trim());
+    const trimmedClaim = claim.trim();
+    console.log("[HypothesisAnalyzer] Analyze Claim button pressed, claim:", trimmedClaim);
     setError(null);
     setLoading(true);
     try {
@@ -91,12 +117,18 @@ export default function HypothesisAnalyzerScreen() {
       const response = await fetch(`${BASE_URL}/api/validate-claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim: claim.trim() }),
+        body: JSON.stringify({ claim: trimmedClaim }),
       });
       if (!response.ok) throw new Error(`Server error ${response.status}`);
       const data = await response.json();
       console.log("[HypothesisAnalyzer] Received response, navigating to results");
-      router.push({ pathname: "/results", params: { claim: claim.trim(), data: JSON.stringify(data) } });
+      // Save to recent claims
+      setRecentClaims((prev) => {
+        const updated = [trimmedClaim, ...prev.filter((c) => c !== trimmedClaim)].slice(0, 8);
+        saveRecentClaims(updated);
+        return updated;
+      });
+      router.push({ pathname: "/results", params: { claim: trimmedClaim, data: JSON.stringify(data) } });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError("Couldn't validate your claim. Check your connection and try again.");
@@ -104,7 +136,7 @@ export default function HypothesisAnalyzerScreen() {
     } finally {
       setLoading(false);
     }
-  }, [claim]);
+  }, [claim, saveRecentClaims]);
 
   const handleChipPress = useCallback((text: string) => {
     console.log("[HypothesisAnalyzer] Example chip pressed:", text);
@@ -199,6 +231,31 @@ export default function HypothesisAnalyzerScreen() {
               </View>
             </View>
           </Animated.View>
+
+          {/* Recent claims */}
+          {recentClaims.length > 0 && (
+            <Animated.View style={{ marginBottom: 8, opacity: chipsAnim, transform: [{ translateY: chipsSlide }] }}>
+              <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: C.TEXT_HINT, letterSpacing: 1, textTransform: "uppercase", paddingHorizontal: 20, marginBottom: 8 }}>Recent</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+                {recentClaims.map((rc) => {
+                  const isPressed = pressedChip === rc;
+                  return (
+                    <Pressable
+                      key={rc}
+                      onPress={() => {
+                        console.log("[HypothesisAnalyzer] Recent claim chip pressed:", rc);
+                        handleChipPress(rc);
+                      }}
+                      disabled={loading}
+                      style={{ borderWidth: 1, borderColor: isPressed ? C.NAVY : C.BORDER, backgroundColor: isPressed ? C.NAVY : C.CARD, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 }}
+                    >
+                      <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: isPressed ? "#ffffff" : C.TEXT_MUTED }} numberOfLines={1}>{rc}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Animated.View>
+          )}
 
           {/* Example chips */}
           <Animated.View style={{ paddingHorizontal: 20, marginBottom: 24, flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", opacity: chipsAnim, transform: [{ translateY: chipsSlide }] }}>
