@@ -14,7 +14,7 @@ const C = {
   BORDER: "#e8e0d5", TEXT: "#1a1a1a", TEXT_MUTED: "#8a7f72",
   TEXT_HINT: "#b5a898", DANGER: "#8b3a3a",
 };
-const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+const BASE_URL = "https://q26sfuevvv3f37eb5vv7wtvdysnmg7m3.app.specular.dev";
 
 const EXAMPLE_CLAIMS = [
   "Creatine improves muscle strength",

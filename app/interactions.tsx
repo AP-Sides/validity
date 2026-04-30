@@ -30,7 +30,7 @@ const C = {
   TEAL: "#2a6b5e",
 };
 
-const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+const BASE_URL = "https://q26sfuevvv3f37eb5vv7wtvdysnmg7m3.app.specular.dev";
 
 const EXAMPLE_CHIPS = [
   "Aspirin + Ibuprofen",

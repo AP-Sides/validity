@@ -29,7 +29,7 @@ const C = {
   DANGER: "#8b3a3a",
 };
 
-const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+const BASE_URL = "https://q26sfuevvv3f37eb5vv7wtvdysnmg7m3.app.specular.dev";
 const MAX_QUESTIONS = 12;
 
 type Question = {

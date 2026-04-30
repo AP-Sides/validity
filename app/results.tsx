@@ -31,7 +31,7 @@ const COLORS = {
   navy: "#1c3a5e",
 };
 
-const BACKEND_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+const BACKEND_URL = "https://q26sfuevvv3f37eb5vv7wtvdysnmg7m3.app.specular.dev";
 
 interface Study {
   title: string;

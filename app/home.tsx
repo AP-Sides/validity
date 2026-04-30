@@ -196,7 +196,7 @@ export default function HomeScreen() {
     setStarRating(n);
   }, []);
 
-  const BASE_URL = "https://cmuaesxcprg74u8g9gy7tas6czbaw9aw.app.specular.dev";
+  const BASE_URL = "https://q26sfuevvv3f37eb5vv7wtvdysnmg7m3.app.specular.dev";
 
   const handleSubmitReview = useCallback(async () => {
     if (starRating === 0) return;
