@@ -73,15 +73,6 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             description: 'Triage assessment result',
             type: 'object',
-            properties: {
-              recommendation: { type: 'string', enum: ['GO_TO_ER', 'GO_TO_CLINIC', 'TREAT_AT_HOME'] },
-              urgency_score: { type: 'number', minimum: 1, maximum: 10 },
-              confidence: { type: 'number', minimum: 0, maximum: 1 },
-              reasoning: { type: 'string' },
-              warning_signs: { type: 'array', items: { type: 'string' } },
-              home_treatment: { type: 'array', items: { type: 'string' } },
-              disclaimer: { type: 'string' },
-            },
           },
           400: {
             description: 'Bad request',

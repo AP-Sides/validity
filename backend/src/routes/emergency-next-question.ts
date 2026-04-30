@@ -96,26 +96,6 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             description: 'Next assessment question or completion signal',
             type: 'object',
-            properties: {
-              done: { type: 'boolean' },
-              question: {
-                oneOf: [
-                  {
-                    type: 'object',
-                    properties: {
-                      id: { type: 'string' },
-                      category: { type: 'string' },
-                      question: { type: 'string' },
-                      type: { type: 'string', enum: ['scale', 'choice', 'text'] },
-                      scale_min: { oneOf: [{ type: 'number' }, { type: 'null' }] },
-                      scale_max: { oneOf: [{ type: 'number' }, { type: 'null' }] },
-                      options: { oneOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }] },
-                    },
-                  },
-                  { type: 'null' },
-                ],
-              },
-            },
           },
           400: {
             description: 'Bad request',
