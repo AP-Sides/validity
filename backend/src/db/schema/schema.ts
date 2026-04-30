@@ -1,13 +1,12 @@
-/**
- * Define your database schema here using Drizzle ORM.
- * Avoid conflicting with potential other schema files in the same directory.
- *
- * Example:
- * import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
- *
- * export const notes = pgTable('notes', {
- *   id: uuid('id').primaryKey().defaultRandom(),
- *   name: text('name').notNull(),
- *   createdAt: timestamp('created_at').notNull().defaultNow(),
- * });
- */
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const nutritionMythsCache = pgTable('nutrition_myths_cache', {
+  id: text('id').primaryKey(),
+  dateKey: text('date_key').notNull(),
+  claim: text('claim').notNull(),
+  verdict: text('verdict').notNull(),
+  oneLiner: text('one_liner').notNull(),
+  explanation: text('explanation').notNull(),
+  studiesJson: text('studies_json').notNull().default('[]'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

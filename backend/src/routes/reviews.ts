@@ -22,7 +22,7 @@ export function register(app: App, fastify: FastifyInstance) {
           required: ['rating', 'review'],
           properties: {
             rating: { type: 'integer', minimum: 1, maximum: 5, description: 'Review rating from 1 to 5' },
-            review: { type: 'string', description: 'Review text' },
+            review: { type: 'string', minLength: 1, description: 'Review text' },
           },
         },
         response: {
