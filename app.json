@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Validity - A Research Tool",
-    "slug": "validity-a-research-tool",
+    "slug": "validity",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-lqe.png",
