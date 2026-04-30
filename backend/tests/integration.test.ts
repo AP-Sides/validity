@@ -78,6 +78,41 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
   });
 
+  test("POST /api/validate-claim/deeper with regenerate_summary parameter", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "Probiotics improve gut health",
+        regenerate_summary: true,
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
+  test("POST /api/validate-claim/deeper with all_studies_context", async () => {
+    const res = await api("/api/validate-claim/deeper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claim: "Mediterranean diet reduces heart disease",
+        all_studies_context: [
+          {
+            title: "Mediterranean Diet Study 2020",
+            stance: "supports",
+            key_finding: "Reduced cardiovascular risk by 30%",
+          },
+          {
+            title: "Diet and Health Review",
+            stance: "neutral",
+            key_finding: "Mixed results depending on adherence",
+          },
+        ],
+      }),
+    });
+    await expectStatus(res, 200);
+  });
+
   test("POST /api/validate-claim/deeper with missing claim returns 400", async () => {
     const res = await api("/api/validate-claim/deeper", {
       method: "POST",
@@ -259,6 +294,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("POST /api/reviews with empty review string returns 400", async () => {
+    const res = await api("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating: 3, review: "" }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("POST /api/reviews with rating below minimum returns 400", async () => {
     const res = await api("/api/reviews", {
       method: "POST",
@@ -319,6 +363,15 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ substances: [] }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("POST /api/drug-interactions with empty substance string returns 400", async () => {
+    const res = await api("/api/drug-interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ substances: ["aspirin", ""] }),
     });
     await expectStatus(res, 400);
   });

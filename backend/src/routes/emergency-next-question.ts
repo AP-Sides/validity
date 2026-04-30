@@ -92,26 +92,6 @@ export function register(app: App, fastify: FastifyInstance) {
             question_number: { type: 'number', description: 'Current question number (1-indexed)' },
           },
         },
-        response: {
-          200: {
-            description: 'Next assessment question or completion signal',
-            type: 'object',
-          },
-          400: {
-            description: 'Bad request',
-            type: 'object',
-            properties: {
-              error: { type: 'string' },
-            },
-          },
-          500: {
-            description: 'Server error',
-            type: 'object',
-            properties: {
-              error: { type: 'string' },
-            },
-          },
-        },
       },
     },
     async (request: FastifyRequest<{ Body: EmergencyNextQuestionRequest }>, reply: FastifyReply) => {
