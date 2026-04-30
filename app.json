@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Validity",
-    "slug": "validity",
+    "name": "Validity - A Research Tool",
+    "slug": "validity-a-research-tool",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-lqe.png",
@@ -35,7 +35,7 @@
       "expo-web-browser",
       "expo-secure-store"
     ],
-    "scheme": "validity",
+    "scheme": "validityaresearchtool",
     "experiments": {
       "typedRoutes": true
     },
